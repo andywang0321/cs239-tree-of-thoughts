@@ -1,0 +1,8 @@
+[project]
+name = "tot-repair"
+description = "Compare linear feedback, retries-with-a-verifier, and tree search on small 2023-era LLMs"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=3.26.0",
+]
