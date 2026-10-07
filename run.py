@@ -86,12 +86,18 @@ def main():
     ap.add_argument("--beam", type=int, default=2, help="tree: partials kept per level")
     ap.add_argument("--max-calls", type=int, default=60, help="hard cap of model calls per task")
     ap.add_argument("--show", action="store_true", help="print each answer")
+    ap.add_argument("--answers", default="", help="also dump every answer to this file")
     ap.add_argument("--selftest", action="store_true", help="check all verifiers offline, no model")
+    ap.add_argument("--summary", metavar="RESULTS.json",
+                    help="re-print the table from a saved run; pass the same --steps/--models as "
+                         "that run to control the table layout")
     ap.add_argument("--out", default="results.json")
     a = ap.parse_args()
 
     if a.selftest:
         return selftest()
+    if a.summary:
+        return report(json.load(open(a.summary)), a.steps, a.models)
 
     tasks = []
     for kind in a.kinds:
@@ -109,7 +115,7 @@ def main():
                 out, cost = methods.solve(step, t, model, a.max_calls, **kwargs)
                 solved = t.final(out)
                 rows.append(dict(model=model, method=step, task=t.id, kind=t.kind,
-                                 solved=solved, **cost))
+                                 solved=solved, answer=out.strip(), **cost))
                 tail = (out.strip().splitlines() or [""])[-1][:60]
                 print(f"  {model:22} {step:9} {t.id:26} {'PASS' if solved else 'fail':4} "
                       f"{cost['calls']:2} calls {cost['gen_tokens']:5} gen-tok "
@@ -119,6 +125,12 @@ def main():
 
     with open(a.out, "w") as f:
         json.dump(rows, f, indent=1)
+    if a.answers:
+        with open(a.answers, "w") as f:
+            for r in rows:
+                f.write(f"### {r['model']} | {r['method']} | {r['task']} | "
+                        f"{'PASS' if r['solved'] else 'fail'} | {r['gen_tokens']} gen-tokens\n"
+                        f"{r['answer']}\n\n")
     report(rows, a.steps, a.models)
     print(f"\nwall clock {time.time() - t_start:.0f}s -> {a.out}")
 

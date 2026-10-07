@@ -1,4 +1,4 @@
-"""15 tasks with machine-checkable answers, plus an optional partial-credit state check.
+"""19 tasks with machine-checkable answers, plus an optional partial-credit state check.
 
 Every task exposes the same surface, which is what lets one search method run on all of them:
   prompt   - the question text

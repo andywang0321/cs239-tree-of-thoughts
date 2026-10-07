@@ -26,6 +26,22 @@ uv run run.py --models llama2:7b-chat mistral:7b-instruct --n 5
 
 Ollama tags of the two 2023 models: `ollama pull llama2:7b-chat` and `ollama pull mistral:7b-instruct`.
 
+**Measured on an M2 MacBook (16 GB, Metal, Ollama): roughly 13 generated tokens/sec on a 7B model**,
+so the full `--n 5` two-model sweep is about an hour. On a CUDA box with vLLM the same sweep is a few
+minutes. Time budget estimates:
+
+| Setup | Runs | Wall clock |
+|---|---|---|
+| `--n 1`, one 7B model, all 4 methods | 12 | ~15 min (M2) / ~30 s (vLLM) |
+| `--n 5`, two 7B models, all 4 methods | 120 | ~80 min (M2) / ~4 min (vLLM) |
+| `--n 1`, `llama3.2:latest` (3B) | 12 | ~7 min (M2) |
+
+Re-print the table from a finished run without re-running anything:
+
+```bash
+uv run run.py --summary results.json --models llama2:7b-chat mistral:7b-instruct
+```
+
 ### On a CUDA box (vLLM, much faster)
 
 ```bash
@@ -36,7 +52,9 @@ BASE_URL=http://localhost:8000/v1 API_KEY=x \
 ```
 
 `BASE_URL` defaults to `http://localhost:11434/v1` (Ollama) and `API_KEY` to `ollama`; vLLM ignores
-the key. Model names are passed through verbatim, so use whatever the server calls them.
+the key. Model names are passed through verbatim, so use whatever the server calls them. No code
+change is needed to switch machines, and only `uv sync` plus the model pulls are required on the
+server.
 
 ### Useful flags
 
@@ -49,23 +67,49 @@ the key. Model names are passed through verbatim, so use whatever the server cal
 --depth 3 --expand 2 --beam 2   # tree: levels, children per node, partials kept
 --max-calls 60         # hard per-task cap so one bad run cannot eat the budget
 --show                 # print every model answer (good for the live demo)
+--answers answers.md   # dump every full answer, timestamped by run
 --out results.json
 ```
 
-A fast dry run that still produces the full table (~1 min on a 3B model):
+A fast dry run that still produces the full table (~7 min on a 3B model, M2):
 
 ```bash
 uv run run.py --models llama3.2:latest --n 1
 ```
 
+Sanity-check that every verifier still accepts its known-good answer, with no model and no server:
+
+```bash
+uv run run.py --selftest     # verifiers: 19/19 accept their golden answer
+```
+
 ## What to show in 10 minutes
 
 1. **The pitch** (1 min): same model, same prompts, three papers' search strategies.
-2. **One trace each** (3 min): `--show` prints every answer. The interesting one is `tree` on math,
-   where the pruning score is an *exact* feasibility check, versus `tree` on programming, where
-   there is no useful partial-credit signal and the search is mostly blind.
-3. **The table** (3 min): solve rate, then generated tokens per *solved* task.
-4. **The punchline** (3 min): where the extra tokens pay off and where they don't.
+2. **One trace each** (3 min): run the sweep beforehand with `--answers demo-answers.md` and scroll
+   through real answers live; regenerate one short case with `--show` if you want to show the model
+   working. The sharpest contrast is `tree` on math, where the pruning score is an *exact* feasibility
+   check, versus `tree` on programming, where there is no usable partial-credit signal and the same
+   search is mostly guessing.
+3. **The table** (3 min): solve rate first, then generated tokens per *solved* task.
+4. **The punchline** (3 min): where the extra tokens pay off, and where a cheaper linear loop with a
+   real verifier already gets there.
+
+### First run, on this laptop (2 × 7B models, 3 tasks, 24 runs)
+
+Per method, 6 runs each (2 models × 3 tasks):
+
+| method | solved | gen-tokens / run | gen-tokens / **solved** | sec / run |
+|---|---|---|---|---|
+| baseline | 1/6 | 155 | 931 | 15 |
+| refine | 2/6 | 672 | 2014 | 60 |
+| retry | 2/6 | 320 | **959** | 24 |
+| tree | 2/6 | 632 | 1896 | 58 |
+
+By family: math 0/2 for both `tree` and `retry`, programming 1/2 and 1/2, writing 1/2 and 1/2.
+With this few samples treat it as a smoke test, not evidence — but the *shape* of the cost columns is
+the point: `retry` reached the same solve rate as `tree` for roughly half the generated tokens,
+because test execution is a free verifier while the tree still has to pay an LLM to rank its partials.
 
 ## Things worth knowing before you present
 
@@ -73,8 +117,9 @@ uv run run.py --models llama3.2:latest --n 1
   verifier, and only `tree` branches. So the three rows separate "better feedback" from "branching".
 - **The tree scores intermediates, not answers.** Game of 24 gets an exact `can these numbers still
   reach 24?` check, so pruning has real signal. Programming gets none — a syntactic check of partial
-  code is close to worthless — so the tree degrades to sampling. This is the honest reason the APR
-  paper retries with test feedback instead of doing MCTS.
+  code is close to worthless — so the tree falls back to asking the model to score its own partial
+  work, which costs a call and is unreliable. This is the honest reason the APR paper retries with
+  test feedback instead of doing MCTS.
 - **Verification is free and exact** (`tasks.py`): tests for code, an exhaustive solver for 24, an
   exact count for words. Nothing is graded by a model, so the pass/fail column is trustworthy.
 - **`tree` is beam search, not full ToT.** ToT's BFS/DFS with MCTS-scale lookahead is out of budget on
