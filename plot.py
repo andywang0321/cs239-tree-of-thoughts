@@ -60,13 +60,17 @@ def pareto(g, xcol):
 
 
 def headline(g):
-    """Say what the data actually shows rather than asserting a conclusion up front."""
-    best = g.sort_values(["rate", "gen_tokens_per_solve"], ascending=[False, True]).iloc[0]
-    rate, tok = best["rate"], best["gen_tokens_per_solve"]
-    if pd.isna(tok):
-        return f"{best['label']} solves the most tasks, but nothing was solved cheaply"
-    return (f"{best['label']} solves the most tasks ({rate:.0%}) "
-            f"at {tok:,.0f} generated tokens per solve")
+    """Say what the data actually shows. Compares methods on their pooled runs across models,
+    not the single best cell, so a method that wins one column cannot claim the headline."""
+    pooled = g.groupby("label").agg(ok=("solved", "sum"), runs=("runs", "sum"),
+                                    tok=("gen_tokens", "sum"))
+    pooled["rate"] = pooled["ok"] / pooled["runs"]
+    pooled = pooled.sort_values(["rate", "tok"], ascending=[False, True])
+    best, runner = pooled.index[0], pooled.index[1]
+    b, r = pooled.loc[best], pooled.loc[runner]
+    lead = "leads" if b["rate"] > r["rate"] else "ties"
+    return (f"{best} {lead} on the full task set "
+            f"({b['rate']:.0%} vs {r['rate']:.0%} for {runner})")
 
 
 def panels(df, g, metric, out):
