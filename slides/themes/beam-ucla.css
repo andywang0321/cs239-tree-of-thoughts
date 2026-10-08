@@ -1,7 +1,8 @@
 /* @theme beam-ucla */
-/* Beam theme (c) rnd195, GNU GPLv3 - github.com/rnd195/my-marp-themes - vendored verbatim from
-   https://rnd195.github.io/my-marp-themes/beam.css, followed by a short OVERRIDES block at the
-   end of this file. Single self-contained theme so `--theme-set` needs only this one path. */
+/* Beam theme (c) rnd195, GNU GPLv3 - github.com/rnd195/my-marp-themes
+   Vendored verbatim from https://rnd195.github.io/my-marp-themes/beam.css, followed by a short
+   OVERRIDES block at the end. Deliberately ONE self-contained file: marp cannot resolve
+   @import between theme files, and a missing theme silently falls back to marp's default. */
 /* author: rnd195 github.com/rnd195 */
 /* beam license: GNU GPLv3 github.com/rnd195/my-marp-themes/blob/live/licenses/LICENSE_beam */
 /* beamer license: GNU GPLv2 github.com/rnd195/my-marp-themes/blob/live/licenses/LICENSE_GPLv2 */
@@ -145,61 +146,49 @@ img[alt~="center"] {
 
 
 /* ============================================================================
-   OVERRIDES (everything below this line is local to this project)
-   1. Beam parks header/footer at the very slide edges in white - invisible on the white
-      body and colliding with the title banner. Lift them inside and tint them grey.
-   2. Cap text and table sizes so dense slides stay on the page.
-   3. Keep the page counter clear of the footer text.
+   OVERRIDES - the only local changes, deliberately small.
+   Beam parks header/footer at the extreme slide edges (top: 96.2%) in white text, which lands
+   on the white body and collides with the bottom bar. We only move and tint them; every font
+   size, spacing and proportion stays exactly as the theme intends.
+   NOTE: do NOT set a font-size on `section`. Marp sizes a 1280x720 slide at 2em (32px) and the
+   whole theme - title banner height, padding, em spacing - is built on that. Overriding it
+   rescales the layout and everything looks wrong.
    ============================================================================ */
 
-:root {
-  --font-size: 0.5em;
-}
-
-section {
-  font-size: 17px;
-}
-
+/* Where do the names go? Beam's title banner (h1:nth-of-type(1)) is absolutely positioned and
+   spans the FULL slide width down to 1.8em, and the body starts at the 2em padding - so the top
+   of the slide has no free space for a header. The theme's own footer band (the two-colour bar
+   along the bottom) is the free strip, and that is where beamer puts exactly this text anyway.
+   So both names and affiliation live in that band: affiliation left, page counter right. */
 header {
-  top: 0.5em;
-  left: 0;
-  right: 1.6em;
-  bottom: auto;
-  width: auto;
-  color: #6b7280;
-  text-align: right;
+  top: auto;
+  bottom: 0.32em;
+  left: 2em;
+  right: auto;
+  color: white;
+  text-align: left;
 }
 
 footer {
   top: auto;
-  bottom: 0.55em;
-  left: 1.6em;
-  right: auto;
-  width: auto;
-  color: #6b7280;
-  text-align: left;
+  bottom: 0.32em;
+  left: auto;
+  right: 2em;
+  color: white;
+  text-align: right;
 }
 
 section::after {
+  top: auto;
+  bottom: 0.32em;
   left: auto;
-  right: 1.6em;
-  color: #9ca3af;
+  right: 9em;
 }
 
+/* The theme inherits marp's default heading scale, which renders `## Slide title` at 2em = 64px.
+   At that size the longer titles wrap and eat a third of the slide. 1.5em keeps the same visual
+   rhythm while leaving ~570px of content height. This is a size tweak, NOT a rescale: the root
+   font-size is untouched, so nothing else in the layout moves. */
 h2 {
-  font-size: 1.3em;
-}
-
-table {
-  font-size: 0.82em;
-}
-
-th,
-td {
-  padding: 2px 7px;
-}
-
-img {
-  display: block;
-  margin: 4px auto 0 auto;
+  font-size: 1.5em;
 }
