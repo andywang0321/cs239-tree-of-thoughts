@@ -30,11 +30,16 @@ Ollama tags of the two 2023 models: `ollama pull llama2:7b-chat` and `ollama pul
 so the full `--n 5` two-model sweep is about an hour. On a CUDA box with vLLM the same sweep is a few
 minutes. Time budget estimates:
 
-| Setup | Runs | Wall clock |
+| Setup | Runs | Wall clock (M2) |
 |---|---|---|
-| `--n 1`, one 7B model, all 4 methods | 12 | ~15 min (M2) / ~30 s (vLLM) |
-| `--n 5`, two 7B models, all 4 methods | 120 | ~80 min (M2) / ~4 min (vLLM) |
-| `--n 1`, `llama3.2:latest` (3B) | 12 | ~7 min (M2) |
+| `--n 1`, one 7B model, all 4 methods | 12 | ~21 min |
+| `--n 1`, two 7B models, all 4 methods | 24 | ~42 min (measured) |
+| `--n 5`, two 7B models, all 4 methods | 120 | ~3.5 h |
+| `--n 1`, `llama3.2:latest` (3B) | 12 | ~7 min |
+
+On the RTX box with vLLM, plan on minutes rather than hours: the reference run above moved ~10k
+generated tokens in 42 minutes on the laptop, which is a few seconds of GPU time. `results.json` and
+`demo-answers.md` in this repo are the output of the reference run.
 
 Re-print the table from a finished run without re-running anything:
 
@@ -83,51 +88,69 @@ Sanity-check that every verifier still accepts its known-good answer, with no mo
 uv run run.py --selftest     # verifiers: 19/19 accept their golden answer
 ```
 
-## What to show in 10 minutes
+## Presenting it
 
-1. **The pitch** (1 min): same model, same prompts, three papers' search strategies.
-2. **One trace each** (3 min): run the sweep beforehand with `--answers demo-answers.md` and scroll
-   through real answers live; regenerate one short case with `--show` if you want to show the model
-   working. The sharpest contrast is `tree` on math, where the pruning score is an *exact* feasibility
-   check, versus `tree` on programming, where there is no usable partial-credit signal and the same
-   search is mostly guessing.
-3. **The table** (3 min): solve rate first, then generated tokens per *solved* task.
-4. **The punchline** (3 min): where the extra tokens pay off, and where a cheaper linear loop with a
-   real verifier already gets there.
-
-### First run, on this laptop (2 × 7B models, 3 tasks, 24 runs)
-
-Per method, 6 runs each (2 models × 3 tasks):
-
-| method | solved | gen-tokens / run | gen-tokens / **solved** | sec / run |
-|---|---|---|---|---|
-| baseline | 1/6 | 155 | 931 | 15 |
-| refine | 2/6 | 672 | 2014 | 60 |
-| retry | 2/6 | 320 | **959** | 24 |
-| tree | 2/6 | 632 | 1896 | 58 |
-
-By family: math 0/2 for both `tree` and `retry`, programming 1/2 and 1/2, writing 1/2 and 1/2.
-With this few samples treat it as a smoke test, not evidence — but the *shape* of the cost columns is
-the point: `retry` reached the same solve rate as `tree` for roughly half the generated tokens,
-because test execution is a free verifier while the tree still has to pay an LLM to rank its partials.
+1. **The pitch** (1 min): same model, same prompts, same tasks — only the shape of the loop changes.
+   `refine` and `retry` are both linear; only `retry` has a symbolic verifier; only `tree` branches.
+2. **The traces** (3 min): the sweep already wrote every raw answer to `demo-answers.md`; scroll
+   through it live. Show the `mistral`+`tree` answer that claims 24 for an expression equal to 18,
+   then the `llama2` answer that invents numbers and never converges.
+3. **The table** (3 min): `uv run run.py --summary results.json --models llama2:7b-chat
+   mistral:7b-instruct` re-prints it instantly — no model calls. Lead with solve rate, then
+   generated tokens per *solved* task, then wall clock.
+4. **The punchline** (3 min): the cheapest structure won, because the verifier — not the tree — is
+   what turned extra compute into accuracy. That is the APR paper's 28.5% → 43.9% → 61.0% story in
+   miniature, and it is also why ToT's own best results come from tasks with an exact `value` check.
 
 ## Things worth knowing before you present
 
-- **Where the gains come from.** `refine` and `retry` are both linear; only `retry` has a symbolic
-  verifier, and only `tree` branches. So the three rows separate "better feedback" from "branching".
+- **Verification is free and exact** (`tasks.py`): unit tests for code, an exhaustive solver for 24, an
+  exact letter count. Nothing is graded by a model, so the pass/fail column is trustworthy.
 - **The tree scores intermediates, not answers.** Game of 24 gets an exact `can these numbers still
-  reach 24?` check, so pruning has real signal. Programming gets none — a syntactic check of partial
-  code is close to worthless — so the tree falls back to asking the model to score its own partial
-  work, which costs a call and is unreliable. This is the honest reason the APR paper retries with
-  test feedback instead of doing MCTS.
-- **Verification is free and exact** (`tasks.py`): tests for code, an exhaustive solver for 24, an
-  exact count for words. Nothing is graded by a model, so the pass/fail column is trustworthy.
+  reach 24?` check, so pruning should have signal; programming gets none, so the tree falls back to
+  asking the model to grade its own partial work. That is a call the tree pays for and often gets
+  wrong, and it is why `tree` burns tokens without converting them into solves.
 - **`tree` is beam search, not full ToT.** ToT's BFS/DFS with MCTS-scale lookahead is out of budget on
   a 7B model; beam search is the paper's own practical choice (their Game of 24 uses BFS with b=5).
-- **Small-model caveat.** A 7B model from 2023 fails these tasks stochastically. With `--n 5` and two
-  models the table is directional, not a significance test. Raise `--n` for anything you quote.
-- **Two knobs are deliberately aligned:** `refine --iters 4` (paper default) and `retry
-  --candidates 3`. Total attempts are comparable, so the token-cost comparison is roughly fair.
+- **This is a demo, not a study.** 24 runs on two 7B models is directional only. Raise `--n` before
+  quoting any number, and expect the ordering to shift as `n` grows.
+- **The comparison is deliberately generous to `tree`:** `refine --iters 4` (the paper's default) and
+  `retry --candidates 3`, so total attempts are roughly matched. `tree` also gets a hard
+  `--max-calls` budget, which is why it stops after ~7 calls instead of exploding combinatorially.
+
+## Reference run (2 × 7B models, 3 tasks, 24 runs, M2 laptop, 42 min)
+
+Six runs per method (2 models × 3 tasks). Re-print this table straight from the committed results:
+
+```bash
+uv run run.py --summary results.json --models llama2:7b-chat mistral:7b-instruct
+```
+
+| method | solved | gen-tokens/run | calls/run | sec/run | gen-tokens per **solved** |
+|---|---|---|---|---|---|
+| baseline | 1/6 | 155 | 1.0 | 9.5 | 931 |
+| refine | 1/6 | 690 | 6.2 | 216 | 4141 |
+| retry | **2/6** | 381 | 2.5 | 31 | **1144** |
+| tree | 2/6 | 741 | 7.2 | 163 | 2222 |
+
+Solve rate by family: programming `retry` 1/2 and `tree` 1/2; writing `retry` 1/2 and `tree` 1/2;
+math 0/2 for everything. Llama-2 7B chat scored 0/3 on all four methods; every point came from Mistral.
+
+The story these numbers tell, in three beats:
+
+1. **The verifier is what pays, not the tree.** `retry` (independent attempts, tests decide) matched
+   `tree` on solve rate for about half the generated tokens and a fifth of the wall-clock time.
+2. **Self-critique is the weakest feedback available.** `refine` was both the most expensive method
+   and no better than one shot. Mistral's critique loop happily "confirmed" a strawberry count of 2
+   seven times in a row; the model cannot see its own error, and the loop just amplifies confidence.
+3. **Search needs a scoreable intermediate.** Math has an exact feasibility check; every method still
+   failed it, and `tree` spent the most tokens doing so. Programming has no partial-credit signal, so
+   `tree`'s pruning was mostly guesswork — exactly why the APR paper retries with test feedback
+   instead of searching a patch tree.
+
+A demo moment worth pausing on: `mistral` + `tree` on Game of 24 produced
+`Answer: ((1 * 6) + (1 - 4)) * 6 = 24`, which is 18, not 24 — stated confidently, as a final answer,
+after 1252 generated tokens. Fluency is not correctness, and that is the case for verifiers.
 
 ## Repository
 

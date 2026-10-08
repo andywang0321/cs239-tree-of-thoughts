@@ -57,13 +57,17 @@ _seen = set()
 
 
 def score_group(llm, t, texts):
-    """One scoring call for a whole frontier, like the paper's vote prompt which analyzes
-    several states at once. Cached repeats rank below fresh states so the search keeps moving."""
+    """One scoring call for a whole frontier, like the paper's vote prompt which analyzes several
+    states at once. Math gets the exact feasibility check; everything else asks the model to grade
+    its own partial work, which costs a call and is only as good as the model's judgment.
+    Cached repeats rank below fresh states so the search keeps moving instead of looping."""
     scores, todo = [], []
     for txt in texts:
         key = (t.id, txt[:300])
-        if key in _seen:
-            scores.append(0.4)
+        if t.kind == "math" and t.score:
+            scores.append(1.0 if t.score(txt) else 0.0)   # exact, no model call needed
+        elif key in _seen:
+            scores.append(0.4)                            # already looked at: rank it lower
         else:
             _seen.add(key)
             todo.append(len(scores))
@@ -76,15 +80,6 @@ def score_group(llm, t, texts):
         for i, s in zip(todo, got + [0.0] * (len(todo) - len(got))):
             scores[i] = s
     return scores
-
-
-def score(llm, t, text):
-    """Verifier where the task has a real intermediate check, otherwise the model's own judgment.
-    Math gets an exact feasibility check; program repair has no usable partial-credit signal,
-    which is exactly why the SE paper leans on retries instead of a tree."""
-    if t.kind == "math" and t.score:
-        return 1.0 if t.score(text) else 0.0
-    return score_group(llm, t, [text])[0]
 
 
 # ------------------------------------------------------------------ the methods
