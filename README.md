@@ -142,15 +142,31 @@ sudo systemctl daemon-reload && sudo systemctl restart ollama
 #### Without sudo
 
 Ollama ships a self-contained binary; the installer's only privileged steps are putting it in
-`/usr/local/bin` and registering a systemd unit. Do both by hand in your home directory instead.
+`/usr/local/bin` and registering a systemd unit. Do both by hand in your home directory instead:
+
+```bash
+uv run serve.py --install     # resolves the latest GitHub release, downloads, unpacks into ~/bin
+export PATH="$HOME/bin:$PATH" # add to ~/.bashrc so it survives logout
+```
+
+The download is ~1.4 GB for the amd64 build (it bundles the CUDA libraries) and ~1 GB for arm64.
+`serve.py --install` resolves the asset name from the GitHub API, so it keeps working when releases
+are renamed. To do it manually, note that **the asset is `.tar.zst`, not `.tgz`** — the old
+`ollama.com/download/ollama-linux-amd64.tgz` URL now 404s:
 
 ```bash
 mkdir -p ~/bin ~/ollama-models
-curl -fL https://ollama.com/download/ollama-linux-amd64.tgz \
-  | tar -xz -C ~/bin --strip-components=1 bin/ollama
-~/bin/ollama --version                    # CUDA/ROCm libs are bundled in the same tarball
-export PATH="$HOME/bin:$PATH"             # add to ~/.bashrc so it survives logout
+tag=$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest \
+      | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+curl -fL -o /tmp/ollama.tar.zst \
+  "https://github.com/ollama/ollama/releases/download/$tag/ollama-linux-amd64.tar.zst"
+tar --zstd -xf /tmp/ollama.tar.zst -C ~/bin     # writes ~/bin/ollama and ~/bin/lib/ollama/*
+~/bin/ollama --version
 ```
+
+On an AMD GPU use `ollama-linux-amd64-rocm.tar.zst` instead (`OLLAMA_VARIANT=rocm uv run serve.py
+--install`); on ARM use `ollama-linux-arm64.tar.zst`. If `tar --zstd` is unsupported on the box,
+install the `zstandard` Python package and `serve.py --install` will use it.
 
 Keep the server alive across logouts. `tmux` is the simplest option and is usually already installed;
 `nohup` works if it is not:
