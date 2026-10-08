@@ -110,6 +110,11 @@ keeping the matplotlib and fontconfig caches in `.mplcache/` beside the script.
 
 ### 2. Install Ollama and start it as a service
 
+The installer script wants root. **If you do not have sudo, skip to "Without sudo" below** — Ollama
+is one static binary and runs fine entirely out of your home directory.
+
+#### With sudo
+
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 sudo systemctl status ollama         # the installer starts it for you
@@ -132,19 +137,60 @@ Environment="OLLAMA_MAX_LOADED_MODELS=2"          # both 7B models fit at once o
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart ollama
-curl -s http://127.0.0.1:11434/api/version        # sanity check
 ```
 
-Verify the GPU is actually being used and not silently falling back to CPU:
+#### Without sudo
+
+Ollama ships a self-contained binary; the installer's only privileged steps are putting it in
+`/usr/local/bin` and registering a systemd unit. Do both by hand in your home directory instead.
 
 ```bash
-nvidia-smi                                   # should show ollama using most of the VRAM
-ollama run llama2:7b-chat "say hi"           # then, in another shell:
-ollama ps                                    # PROCESSOR must read 100% GPU, not "100% CPU"
+mkdir -p ~/bin ~/ollama-models
+curl -fL https://ollama.com/download/ollama-linux-amd64.tgz \
+  | tar -xz -C ~/bin --strip-components=1 bin/ollama
+~/bin/ollama --version                    # CUDA/ROCm libs are bundled in the same tarball
+export PATH="$HOME/bin:$PATH"             # add to ~/.bashrc so it survives logout
 ```
 
-If `ollama ps` says CPU, your driver/CUDA runtime is wrong; fix that before running the sweep,
-because a CPU fallback is 20-50x slower and will make the cost-per-second column meaningless.
+Keep the server alive across logouts. `tmux` is the simplest option and is usually already installed;
+`nohup` works if it is not:
+
+```bash
+tmux new -s ollama
+OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS=$HOME/ollama-models \
+  OLLAMA_KEEP_ALIVE=30m OLLAMA_NUM_PARALLEL=4 OLLAMA_MAX_LOADED_MODELS=2 \
+  ~/bin/ollama serve
+# Ctrl-b d to detach;  tmux attach -t ollama to come back
+```
+
+```bash
+# no tmux on the box:
+nohup env OLLAMA_MODELS=$HOME/ollama-models OLLAMA_KEEP_ALIVE=30m \
+  ~/bin/ollama serve > ~/ollama.log 2>&1 &
+```
+
+The project wraps all of this in `serve.py`, so you can skip the environment juggling:
+
+```bash
+uv run serve.py --check     # binary, version, model store, endpoint, which tags are present
+uv run serve.py             # runs `ollama serve` in the foreground, models in ~/ollama-models
+uv run serve.py --pull      # downloads both 2023 models (~8 GB) into that store
+uv run serve.py --gpu       # nvidia-smi plus whether ollama put the model on the GPU or the CPU
+```
+
+`serve.py` is optional — if you already have a server running, `run.py` just talks HTTP to it. Point
+`BASE_URL` elsewhere (e.g. `BASE_URL=http://127.0.0.1:8000/v1` for vLLM) and nothing else changes.
+
+#### Both cases: verify the GPU is really being used
+
+```bash
+ollama run llama2:7b-chat "say hi"           # then, in another shell:
+uv run serve.py --gpu                        # or: ollama ps
+```
+
+`PROCESSOR` (or `serve.py`'s verdict) must read **100% GPU**. If it says CPU, your driver/CUDA
+runtime is wrong; fix that before running the sweep, because a CPU fallback is 20-50x slower and will
+make the `seconds` column meaningless.
 
 ### 3. Pull the two 2023 models
 
@@ -280,6 +326,7 @@ tasks.py    19 tasks + their verifiers (tests, exhaustive search, exact answers)
 llm.py      one OpenAI-compatible chat client + the cost bookkeeper
 methods.py  the four reasoning strategies (~120 lines)
 run.py      the experiment: loops, progress lines, results table
+serve.py    start Ollama without root, pull models, verify GPU offload
 plot.py     the figure: solve rate, cost per solve, per family, token placement
 ```
 

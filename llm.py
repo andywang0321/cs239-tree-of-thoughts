@@ -1,5 +1,6 @@
 """One small client for any OpenAI-compatible server (Ollama, vLLM, ...)."""
 import os
+import shutil
 import time
 from dataclasses import dataclass, field
 
@@ -7,6 +8,13 @@ from openai import OpenAI
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:11434/v1")
 API_KEY = os.environ.get("API_KEY", "ollama")
+# Where the ollama binary lives. Without sudo it usually sits in ~/bin, so probe a few places
+# instead of relying on PATH being set up by a login shell.
+OLLAMA_BIN = (os.environ.get("OLLAMA_BIN") or shutil.which("ollama")
+              or next((p for p in [os.path.expanduser("~/bin/ollama"),
+                                   os.path.expanduser("~/.local/bin/ollama"),
+                                   "/usr/local/bin/ollama", "/usr/bin/ollama"]
+                       if os.path.exists(p)), "ollama"))
 
 
 @dataclass
