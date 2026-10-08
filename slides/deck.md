@@ -180,7 +180,7 @@ Notes:
 
 ---
 
-# What I take away
+# Takeaways
 
 1. **Verification is the win, not the tree.** Tests turn extra compute into correct answers. More thinking without a check mostly buys longer wrong answers.
 2. **The methods are not interchangeable.** Agentic-PR owns counting and coding; Tree-of-Thought's best case is a harder task on a stronger model.
