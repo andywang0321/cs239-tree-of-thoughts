@@ -300,14 +300,14 @@ its own instead of squeezed into a grid. Every datapoint stays separated by task
 
 | File | What it shows |
 |---|---|
-| `visuals/per-task-matrix.png` | One dot per task × method × model: who solved what |
-| `visuals/per-task-cost.png` | Tokens spent on each task, filled = solved, hollow = failed |
-| `visuals/cost-quality.png` | Aggregate: solve rate against tokens per solved task |
+| `visuals/success-rate.png` | Solve rate, grouped by method, then model, then the 3 task families |
+| `visuals/tokens.png` | Tokens per run, same grouping (bar = mean, whisker = min-max) |
+| `visuals/tokens-solved.png` | The same, keeping only runs that solved the task |
 | `visuals/TABLES.md` | The tables as markdown, including a per-task breakdown |
 
-The two `per-task-*` figures are the important ones: pooling across tasks hides the fact that six of
-the seventeen tasks were solved by nobody, and that each method owns different tasks. Use `--outdir`
-to send figures elsewhere, or `--no-figure` for tables only.
+Each method shows two model bars (one colour per model), and each of those splits into three skinny
+bars for Game of 24, coding and letter counting - so nothing pools three different tasks together.
+Use `--outdir` to send figures elsewhere, or `--no-figure` for tables only.
 
 Better still, copy the results file back to your laptop and plot there:
 
@@ -408,8 +408,15 @@ plot.py     the figures: solve rate, cost per solve, per family, token placement
 
 papers/     the three papers, plus my extracted text copies for grepping
 data/       results.json (laptop reference), results-full.json (GPU run), smoke.json, answers-*.md
-visuals/    one PNG per result, plus TABLES.md
-slides/     the demo deck
+visuals/    success-rate.png, tokens.png, tokens-solved.png, TABLES.md
+slides/     deck.md (Marp, Beam theme vendored in slides/themes/beam.css)
 ```
 
 Papers: `papers/tree-of-thoughts.pdf`, `papers/self-refine.pdf`, `papers/agent-program-repair.pdf`.
+
+Deck: `slides/deck.md` uses the [Beam theme](https://github.com/rnd195/my-marp-themes) (vendored at
+`slides/themes/beam.css`). Render it from the repo root:
+
+```bash
+marp slides/deck.md --theme-set slides/themes/beam.css -o slides/deck.pdf --allow-local-files
+```

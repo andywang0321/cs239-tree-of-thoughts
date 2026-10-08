@@ -6,10 +6,9 @@
 
 Every figure breaks the result down by task family (Game of 24 / coding / letter counting) AND by
 model, so no bar or box pools three very different tasks together:
-    visuals/success-rate.png             solve rate, one bar per method per model per family
-    visuals/success-rate-<model>.png     the same, one model per figure (used in the deck)
-    visuals/tokens-<model>.png           tokens per *solved* run, one box per method per family
-    visuals/tokens-all.png               both models side by side, successes and failures
+    visuals/success-rate.png    solve rate: grouped by method, then model, then 3 family bars
+    visuals/tokens.png          tokens per run, same grouping
+    visuals/tokens-solved.png   the same, keeping only runs that solved the task
 """
 import argparse
 import json
@@ -36,10 +35,8 @@ SHORT = {"baseline": "Baseline (IO)", "refine": "Self-Refine",
 MODELS = {"llama2:7b-chat": "Llama-2 7B", "mistral:7b-instruct": "Mistral 7B"}
 KINDS = ["math", "program", "writing"]
 FAMILY = {"math": "Game of 24", "program": "Coding", "writing": "Letter counting"}
-# one colour per model per family, so position + shade identifies every bar and box
-SHADE = {("math", "llama2:7b-chat"): "#08519c", ("math", "mistral:7b-instruct"): "#9ecae1",
-         ("program", "llama2:7b-chat"): "#a63603", ("program", "mistral:7b-instruct"): "#fdbf6f",
-         ("writing", "llama2:7b-chat"): "#006d2c", ("writing", "mistral:7b-instruct"): "#a1d99b"}
+# one colour per model, shared by all three task families; a white edge separates the skinny bars
+MCOLOR = {"llama2:7b-chat": "#4C72B0", "mistral:7b-instruct": "#DD8452"}
 
 
 def load(path):
@@ -87,75 +84,68 @@ def _legend(ax, models, y=-.17, ncol=6, size=9.5):
 
 
 # ------------------------------------------------------------------ figures
-def fig_success_rate(df, outdir, path="success-rate.png", only_model=None):
-    """3 bars per method: one per task family. With only_model, a single model's figure."""
-    if only_model:
-        df = df[df.model == only_model]
+def fig_success_rate(df, outdir, path="success-rate.png"):
+    """Grouped by method, then model, then task family: every method shows 2 model bars
+    (Llama-2, Mistral) and each of those is split into 3 skinny bars for {24, code, count}."""
     models = sorted(df["model"].unique())
-    n = len(KINDS) * len(models)
-    fig, ax = plt.subplots(figsize=(11, 4.6))
-    width = 1 / (n + 1)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bar_w, pad = 0.11, 0.035
     for mi, m in enumerate(METHODS):
-        for fi, k in enumerate(KINDS):
-            for pi, mod in enumerate(models):
+        for pi, mod in enumerate(models):
+            x0 = mi + (pi - .5) * (3 * bar_w + 2 * pad)
+            for fi, k in enumerate(KINDS):
                 sub = df[(df.method == m) & (df.kind == k) & (df.model == mod)]
                 rate = sub["solved"].mean() if len(sub) else 0.0
-                x = mi + (fi * len(models) + pi - (n - 1) / 2) * width
-                ax.bar(x, rate, width * .9, color=SHADE[(k, mod)], edgecolor="white", lw=.7)
-                ax.text(x, rate + .012, f"{rate:.0%}" if rate else "0", ha="center",
-                        fontsize=7.5, color="#333")
+                x = x0 + fi * (bar_w + pad)
+                ax.bar(x, rate, bar_w, color=MCOLOR[mod], edgecolor="white", linewidth=1.1)
+                ax.text(x, rate + .015, f"{rate:.0%}", ha="center", fontsize=7.5, color="#333")
     ax.set_xticks(range(len(METHODS)))
-    ax.set_xticklabels([SHORT[m].replace(" ", "\n", 1) for m in METHODS], fontsize=11)
-    ax.set_ylabel("share of that family's tasks solved", fontsize=12)
-    ax.set_ylim(0, .72)
-    fam_n = {k: df[df.kind == k]["task"].nunique() for k in KINDS}
-    ax.set_title(f"Solve rate - {MODELS[models[0]] if len(models) == 1 else 'both models'}, "
-                 f"one bar per task family\n"
-                 + " · ".join(f"{FAMILY[k]}: {fam_n[k]} tasks" for k in KINDS), fontsize=12.5)
-    if len(models) == 1:
-        ax.legend(handles=[Patch(facecolor=SHADE[(k, models[0])], edgecolor="#666", label=FAMILY[k])
-                           for k in KINDS], loc="upper center", bbox_to_anchor=(.5, -.13),
-                  ncol=3, frameon=False, fontsize=10)
-    else:
-        _legend(ax, models)
+    ax.set_xticklabels([NAMES[m] for m in METHODS], fontsize=10)
+    ax.set_ylabel("share of tasks solved")
+    ax.set_ylim(0, 1.0)
+    ax.set_yticks([0, .25, .5, .75, 1.0])
+    ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
+    ax.set_title("Solve rate by method, model and task family", fontsize=13)
+    ax.legend(handles=[Patch(facecolor=MCOLOR[mod], edgecolor="white", label=MODELS[mod])
+                       for mod in models],
+              title="", loc="upper right", frameon=False, fontsize=10, ncol=2)
+    ax.text(.5, -.17, "within each bar group:  Game of 24  |  coding  |  letter counting",
+            transform=ax.transAxes, ha="center", fontsize=9, color="#666")
     return _save(fig, outdir, path)
 
 
-def fig_tokens(df, outdir, solved_only=True, path="tokens.png", only_model=None):
-    """Boxes of tokens per run, grouped by family within each method, one panel per model.
-    With only_model, a single-panel figure for that model alone."""
-    models = [only_model] if only_model else sorted(df["model"].unique())
-    fig, axes = plt.subplots(1, len(models), figsize=(8.2 * len(models), 4.1), sharey=True,
-                             squeeze=False)
-    for ax, mod in zip(axes[0], models):
-        sub = df[(df.model == mod) & (df.solved == solved_only) & (df.gen_tokens > 0)]
-        for mi, m in enumerate(METHODS):
+def fig_tokens(df, outdir, path="tokens.png", solved_only=False):
+    """Same grouping (method -> model -> family), showing the spread of generated tokens
+    as a bar to the mean plus a min-max whisker."""
+    models = sorted(df["model"].unique())
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bar_w, pad = 0.11, 0.035
+    for mi, m in enumerate(METHODS):
+        for pi, mod in enumerate(models):
+            x0 = mi + (pi - .5) * (3 * bar_w + 2 * pad)
             for fi, k in enumerate(KINDS):
-                vals = sub[(sub.method == m) & (sub.kind == k)]["gen_tokens"]
-                x = mi + (fi - 1) * .23
+                vals = df[(df.method == m) & (df.kind == k) & (df.model == mod)]["gen_tokens"]
+                if solved_only:
+                    vals = df[(df.method == m) & (df.kind == k) & (df.model == mod) &
+                              df.solved]["gen_tokens"]
+                x = x0 + fi * (bar_w + pad)
                 if len(vals):
-                    bp = ax.boxplot([vals], positions=[x], widths=.18, patch_artist=True,
-                                    showfliers=False, medianprops=dict(color="black", lw=1.4))
-                    for b in bp["boxes"]:
-                        b.set(facecolor=SHADE[(k, mod)], alpha=.95, edgecolor="#444", lw=.7)
-                    ax.scatter([x] * len(vals), vals, s=11, color="#222", alpha=.6, zorder=3)
+                    mean = vals.mean()
+                    ax.bar(x, mean, bar_w, color=MCOLOR[mod], edgecolor="white", linewidth=1.1)
+                    ax.errorbar(x, mean, yerr=[[mean - vals.min()], [vals.max() - mean]],
+                                fmt="none", ecolor="#333", elinewidth=1, capsize=2)
                 else:
-                    ax.text(x, 22, "never\nsolved", ha="center", va="bottom", fontsize=7.5,
-                            color="#999", style="italic")
-        ax.set_xticks(range(len(METHODS)))
-        ax.set_xticklabels([SHORT[m].replace(" ", "\n", 1) for m in METHODS], fontsize=10)
-        ax.set_title(MODELS[mod], fontsize=12.5)
-        ax.set_yscale("log")
-        ax.set_ylim(15, 4000)
-    axes[0][0].set_ylabel("generated tokens per run (log scale)", fontsize=12)
-    what = "on the runs that solved the task" if solved_only else "on every run, solved or failed"
-    fig.suptitle(f"Tokens spent {what}\nboxes grouped by task family within each method",
-                 fontsize=13)
-    fam = [Patch(facecolor=SHADE[(k, models[0])], edgecolor="#666", lw=.6, label=FAMILY[k])
-           for k in KINDS]
-    fig.legend(handles=fam, loc="lower center", ncol=3, frameon=False, fontsize=10,
-               bbox_to_anchor=(.5, -.01))
-    fig.tight_layout(rect=(0, .05, 1, .93))
+                    ax.text(x, 25, "0", ha="center", fontsize=7.5, color="#999")
+    ax.set_xticks(range(len(METHODS)))
+    ax.set_xticklabels([NAMES[m] for m in METHODS], fontsize=10)
+    ax.set_ylabel("generated tokens per run")
+    ax.set_title("Tokens spent per run, by method, model and task family\n"
+                 "(bar = mean, whisker = min to max)", fontsize=13)
+    ax.legend(handles=[Patch(facecolor=MCOLOR[mod], edgecolor="white", label=MODELS[mod])
+                       for mod in models],
+              title="", loc="upper left", frameon=False, fontsize=10, ncol=2)
+    ax.text(.5, -.17, "within each bar group:  Game of 24  |  coding  |  letter counting",
+            transform=ax.transAxes, ha="center", fontsize=9, color="#666")
     return _save(fig, outdir, path)
 
 
@@ -278,11 +268,8 @@ def main():
     if not a.no_figure:
         os.makedirs(a.outdir, exist_ok=True)
         fig_success_rate(df, a.outdir)
-        for mod in sorted(df["model"].unique()):
-            tag = MODELS[mod].replace(" ", "-").replace(" 7B", "").lower()
-            fig_success_rate(df, a.outdir, path=f"success-rate-{tag}.png", only_model=mod)
-            fig_tokens(df, a.outdir, path=f"tokens-{tag}.png", only_model=mod)
-        fig_tokens(df, a.outdir, solved_only=False, path="tokens-all.png")
+        fig_tokens(df, a.outdir)
+        fig_tokens(df, a.outdir, solved_only=True, path="tokens-solved.png")
     table(df, g)
     if a.tables:
         markdown(df, g, a.tables, a.results)
