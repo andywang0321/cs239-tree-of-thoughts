@@ -1,8 +1,8 @@
 # Presenter's notes
 
-Companion to `slides/deck.md`. One section per slide, in deck order, with the speaker assignment
-suggested at the top of each. Numbers here match `data/results-full.json` — if you re-run the
-experiment, regenerate these with `uv run plot.py --results data/results-full.json`.
+Companion to `slides/deck.md`. One section per slide, in deck order. Numbers here match
+`data/results-full.json`; if you re-run the experiment, refresh the figures with
+`uv run plot.py --results data/results-full.json` and re-check any figure quoted below.
 
 **Rough timing:** setup slides 1–5 ≈ 4 min · results slides 6–8 ≈ 4 min · takeaways ≈ 1 min ·
 appendices as needed for questions.
