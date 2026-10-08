@@ -88,7 +88,7 @@ def fig_success_rate(df, outdir, path="success-rate.png"):
     """Grouped by method, then model, then task family: every method shows 2 model bars
     (Llama-2, Mistral) and each of those is split into 3 skinny bars for {24, code, count}."""
     models = sorted(df["model"].unique())
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(8, 4.2))
     bar_w, pad = 0.11, 0.035
     for mi, m in enumerate(METHODS):
         for pi, mod in enumerate(models):
@@ -119,7 +119,7 @@ def fig_per_run(df, outdir, metric="gen_tokens", ylabel="generated tokens per ru
     """Same grouping (method -> model -> family), showing the spread of a per-run metric
     as a bar to the mean plus a min-max whisker."""
     models = sorted(df["model"].unique())
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(8, 4.2))
     bar_w, pad = 0.11, 0.035
     for mi, m in enumerate(METHODS):
         for pi, mod in enumerate(models):
@@ -234,7 +234,8 @@ def main():
     ap.add_argument("--tables", metavar="TABLES.md", help="also write the tables as markdown")
     ap.add_argument("--no-figure", action="store_true", help="tables only")
     a = ap.parse_args()
-    sns.set_theme(style="whitegrid", context="talk", font_scale=0.9)
+    # "paper" context + 0.8 scale keeps labels legible when the figure is scaled into a slide
+    sns.set_theme(style="whitegrid", context="paper", font_scale=1.3)
     df = load(a.results)
     g = summary(df)
     p = pooled(df)

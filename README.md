@@ -409,14 +409,20 @@ plot.py     the figures: solve rate, cost per solve, per family, token placement
 papers/     the three papers, plus my extracted text copies for grepping
 data/       results.json (laptop reference), results-full.json (GPU run), smoke.json, answers-*.md
 visuals/    success-rate.png, tokens.png, wall-time.png, TABLES.md
-slides/     deck.md (Marp, Beam theme vendored in slides/themes/beam.css)
+slides/     deck.md (Marp, Beam theme in slides/themes/beam-ucla.css)
 ```
 
 Papers: `papers/tree-of-thoughts.pdf`, `papers/self-refine.pdf`, `papers/agent-program-repair.pdf`.
 
-Deck: `slides/deck.md` uses the [Beam theme](https://github.com/rnd195/my-marp-themes) (vendored at
-`slides/themes/beam.css`). Render it from the repo root:
+Deck: `slides/deck.md` uses the [Beam theme](https://github.com/rnd195/my-marp-themes). Render it
+from the repo root, **passing the theme explicitly**:
 
 ```bash
-marp slides/deck.md --theme-set slides/themes/beam.css -o slides/deck.pdf --allow-local-files
+marp slides/deck.md --theme-set slides/themes/beam-ucla.css -o slides/deck.pdf --allow-local-files
 ```
+
+Without `--theme-set`, marp cannot find a theme named `beam-ucla` and silently falls back to its
+default theme, so the deck renders as plain markdown rather than Beam. All CSS lives in
+`slides/themes/`: `beam.css` is the upstream theme vendored verbatim, and `beam-ucla.css` is the
+single self-contained theme the deck actually uses (Beam + a short overrides block for readable
+header/footer text and tighter table sizing).

@@ -1,17 +1,21 @@
 ---
 marp: true
-theme: beam
+theme: beam-ucla
 paginate: true
 header: 'Bruce Li, Andy Wang, Cecilia Xu'
 footer: 'UCLA Samueli School of Engineering'
 ---
 
 <!--
-RENDER  (from the repo root)
-  marp slides/deck.md --theme-set slides/themes/beam.css -o slides/deck.pdf --allow-local-files
-The theme is vendored at slides/themes/beam.css from https://github.com/rnd195/my-marp-themes
-Presenter notes live in HTML comments and never render into the PDF.
+RENDER  (from the repo root, and the theme MUST be given to marp)
+  marp slides/deck.md --theme-set slides/themes/beam-ucla.css -o slides/deck.pdf --allow-local-files
+Without --theme-set, marp does not find the theme and silently renders with its default theme -
+that is the difference between "looks like Beam" and "looks like plain markdown".
+The only CSS lives in slides/themes/: beam.css is vendored from
+https://rnd195.github.io/my-marp-themes/beam.css and beam-ucla.css adds small overrides.
 -->
+
+<!-- Presenter notes live in HTML comments and never render into the PDF. -->
 
 <!-- _class: title -->
 
@@ -110,7 +114,7 @@ Notes:
 
 # Success rate
 
-![w:950](visuals/success-rate.png)
+![w:820](visuals/success-rate.png)
 
 **Findings:**
 - **Agentic-PR wins overall (35%)** and is the strongest method on coding and on counting.
@@ -131,7 +135,7 @@ Notes:
 
 # Tokens spent
 
-![w:950](visuals/tokens.png)
+![w:820](visuals/tokens.png)
 
 **Findings:**
 - **Game of 24 costs the most for every method** — and it is the family almost nobody solves.
@@ -150,7 +154,7 @@ Notes:
 
 # Wall-clock time
 
-![w:950](visuals/wall-time.png)
+![w:820](visuals/wall-time.png)
 
 **Findings:**
 - **Baseline is 5× faster than Self-Refine** (2.1s vs 10.0s per run) and both are stable across models — time tracks *how many calls* a method makes, not how good it is.
@@ -191,16 +195,16 @@ Notes:
 
 # Appendix A — Task distribution
 
-| Family | Tasks | Runs per model, per method |
+| Family | Tasks | Task IDs |
 |---|---|---|
-| Game of 24 | 6 | 6 |
-| Coding | 5 | 5 |
-| Letter counting | 6 | 6 |
-| **Total** | **17** | **17** |
+| Game of 24 | 6 | `g24-0` … `g24-5` |
+| Coding | 5 | `prog-merge_intervals`, `prog-rotate`, `prog-kth_largest`, `prog-parse_formula`, `prog-merge_sorted_arrays` |
+| Letter counting | 6 | `count-strawberry`, `count-raspberry`, `count-Mississippi`, `count-bookkeeper`, `count-dreadnought`, `count-refrigerator` |
+| **Total** | **17** | |
 
-Total runs: 2 models × 4 methods × 17 tasks = **136**
+Each task gets 8 runs (2 models × 4 methods) → 2 × 4 × 17 = **136 runs**.
 
-Per task, 8 runs (2 models × 4 methods). Six tasks were solved by nobody: five Game of 24 puzzles and `parse_formula`.
+Six tasks were solved by nobody: `g24-1` … `g24-5` and `prog-parse_formula`.
 
 <!--
 Notes:
