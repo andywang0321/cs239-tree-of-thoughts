@@ -1,7 +1,7 @@
 """Start Ollama without root, keep it running, pull the models, verify the GPU is in use.
 
     uv run serve.py --check        # report what is installed, running, and on which device
-    uv run serve.py --install      # download the ollama binary from GitHub into ~/bin (no root)
+    uv run serve.py --install      # download a release from GitHub into ~/ollama (no root)
     uv run serve.py --pull         # download the two 2023 models into ~/ollama-models
     uv run serve.py                # start the server in the foreground (Ctrl-C to stop)
     uv run serve.py --gpu          # is the model on the GPU, or silently on the CPU?
@@ -245,7 +245,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="report install/server/model status")
-    ap.add_argument("--install", action="store_true", help="download the ollama binary into ~/bin")
+    ap.add_argument("--install", action="store_true", help="download the ollama release into ~/ollama")
     ap.add_argument("--pull", action="store_true", help="download both models")
     ap.add_argument("--gpu", action="store_true", help="verify GPU offload")
     a = ap.parse_args()
