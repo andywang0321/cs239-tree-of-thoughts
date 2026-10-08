@@ -168,6 +168,38 @@ On an AMD GPU use `ollama-linux-amd64-rocm.tar.zst` instead (`OLLAMA_VARIANT=roc
 --install`); on ARM use `ollama-linux-arm64.tar.zst`. If `tar --zstd` is unsupported on the box,
 install the `zstandard` Python package and `serve.py --install` will use it.
 
+#### "PermissionError: [Errno 13] Permission denied" right after installing
+
+`serve.py --install` sets the file mode to 755 itself, so if exec still fails the *mount* is
+refusing to run programs (`noexec`), which is common on managed cluster home directories. The
+installer now detects this and says so; to confirm by hand:
+
+```bash
+findmnt -T ~/bin -o TARGET,SOURCE,OPTIONS     # look for noexec in OPTIONS
+ls -l ~/bin/ollama                            # should be -rwxr-xr-x
+file ~/bin/ollama                             # should be ELF 64-bit LSB executable
+cp /bin/true ~/bin/_exectest && ~/bin/_exectest; rm -f ~/bin/_exectest
+```
+
+If `_exectest` fails too, the directory cannot execute anything. Fix it by installing on a mount
+that allows exec — ask the admins, or try any scratch/local/tmp area you can write to and test the
+same way:
+
+```bash
+for d in /scratch/$USER /local/$USER /tmp/$USER ~/tmp .; do
+  mkdir -p "$d" 2>/dev/null && cp /bin/true "$d/_t" 2>/dev/null && "$d/_t" 2>/dev/null \
+    && echo "EXEC OK: $d" ; rm -f "$d/_t"
+done
+```
+
+```bash
+OLLAMA_BIN_DIR=/scratch/$USER/bin uv run serve.py --install
+export PATH="/scratch/$USER/bin:$PATH"
+```
+
+Note that `ollama` must *run* from an exec-capable mount, but the model store does not — only be
+read — so `OLLAMA_MODELS` can stay on the bigger home filesystem:
+
 Keep the server alive across logouts. `tmux` is the simplest option and is usually already installed;
 `nohup` works if it is not:
 

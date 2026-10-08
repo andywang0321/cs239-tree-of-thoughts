@@ -85,9 +85,39 @@ def install():
     os.remove(tmp)
     binary = os.path.join(BIN_DIR, "ollama")
     os.chmod(binary, 0o755)
-    print(subprocess.run([binary, "--version"], capture_output=True, text=True).stdout.strip())
+    print(f"installed {binary} ({os.path.getsize(binary) / 1e6:.0f} MB)")
+    ok, msg = check_exec(binary)
+    print(f"exec check  : {'ok' if ok else 'FAILED - ' + msg}")
+    if not ok:
+        print("\nThe filesystem holding this directory probably has the noexec flag set. "
+              "Check with:  findmnt -T ~/bin -o TARGET,SOURCE,OPTIONS\n"
+              "Then either install somewhere else:\n"
+              "    OLLAMA_BIN_DIR=/path/on/exec/mount uv run serve.py --install\n"
+              "or look for a module/container with a writable exec mount (often /tmp or /scratch).")
+        sys.exit(1)
     print(f"\nadd it to your PATH once:  export PATH=\"{BIN_DIR}:$PATH\"")
     print("then:  uv run serve.py        # start the server")
+
+
+def check_exec(binary):
+    """Distinguish 'file is not executable' from 'the mount forbids exec at all'."""
+    try:
+        p = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=60)
+    except PermissionError as e:
+        hint = "mount has noexec" if not _exec_allowed(BIN_DIR) else "permission denied"
+        return False, f"{e} ({hint})"
+    except OSError as e:
+        return False, str(e)
+    return p.returncode == 0, (p.stdout or p.stderr).strip()
+
+
+def _exec_allowed(path):
+    """False when the filesystem is mounted noexec (Linux only; macOS has no ST_NOEXEC)."""
+    flag = getattr(os, "ST_NOEXEC", 0)
+    try:
+        return not (os.statvfs(path).f_flag & flag) if flag else True
+    except OSError:
+        return True
 
 
 def extract(path, dest):
