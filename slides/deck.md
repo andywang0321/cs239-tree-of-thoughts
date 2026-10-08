@@ -4,25 +4,6 @@ theme: beam
 paginate: true
 header: 'Bruce Li, Andy Wang, Cecilia Xu'
 footer: 'UCLA Samueli School of Engineering'
-style: |
-  :root { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  section { font-size: 19px; }
-  /* the Beam theme parks header/footer at the very top and bottom edges in white; lift them
-     inside the slide and tint them so they are actually readable */
-  header {
-    top: 0.45em; left: 0; right: 1.6em; bottom: auto; width: auto;
-    color: #6b7280; text-align: right; font-size: 0.55em;
-  }
-  footer {
-    top: auto; bottom: 0.5em; left: 1.6em; right: auto; width: auto;
-    color: #6b7280; text-align: left; font-size: 0.55em;
-  }
-  h1:nth-of-type(1) { height: auto; padding: 0.12em 0.5em; font-size: 0.78em; }
-  h2 { font-size: 1.35em; }
-  table { font-size: 0.85em; }
-  th, td { padding: 2px 8px; }
-  img { display: block; margin: 6px auto 0 auto; }
-  section.appendix h2 { color: #6b7280; }
 ---
 
 <!--
@@ -160,9 +141,29 @@ Notes:
 
 <!--
 Notes:
-- Bar height is the mean, the whisker spans min to max, so the spread is visible without a box plot.
-- "0" labels mark method/model/family combinations that never solved anything - themselves a finding.
+- Bar height is the mean over every run, whisker spans min to max, so both level and spread are visible.
+- Bars are short wherever a method answered briefly, which is exactly the Baseline signature: it cannot spend more, because it never gets a second attempt.
 - The headline of the deck: cost is a property of model-plus-method, not of the method alone.
+-->
+
+---
+
+# Wall-clock time
+
+![w:950](visuals/wall-time.png)
+
+**Findings:**
+- **Baseline is 5× faster than Self-Refine** (2.1s vs 10.0s per run) and both are stable across models — time tracks *how many calls* a method makes, not how good it is.
+- **Agentic-PR is the cheapest of the deliberate methods** (6.1s) and is *faster on the stronger model* (4.9s vs 7.3s): better models need fewer retries.
+- **Tree-of-Thought is slowest** (11.2s) and its cost is model-dependent again — 13.7s on Llama-2 vs 8.7s on Mistral.
+- **Game of 24 dominates every method's time budget** (11.3s mean) even though it is almost never solved.
+
+<!--
+Notes:
+- Same grouping as the other two figures: method, then model, then the three families.
+- The caveat to state out loud: these runs were 6-at-a-time against 4 serving slots, so the absolute numbers include queueing. The ordering is the honest part.
+- The useful framing: wall-clock is a proxy for API cost. Self-Refine spends 342s total across its 34 runs; Baseline spends 73s. That gap is the price of the critique loop.
+- Notice Agentic-PR beats Self-Refine on time despite making attempts: it stops as soon as tests pass, which is usually attempt 1 or 2 (mean 2.5 calls).
 -->
 
 ---
@@ -172,7 +173,8 @@ Notes:
 1. **Verification is the win, not the tree.** Tests turn extra compute into correct answers. More thinking without a check mostly buys longer wrong answers.
 2. **The methods are not interchangeable.** Agentic-PR owns counting and coding; Tree-of-Thought's best case is a harder task on a stronger model.
 3. **Self-Refine is the weakest link here.** Most expensive, least accurate — worse than one-shot on every family.
-4. **Cost depends on the model as much as the method.** Tree-of-Thought cost 9× more per solve on Llama-2 than on Mistral, with identical code.
+4. **Time tracks the loop, not the result.** Baseline 2.1s per run, Agentic-PR 6.1s, Self-Refine 10.0s, Tree-of-Thought 11.2s — and the extra time does not buy accuracy for the two model-driven methods.
+5. **Cost depends on the model as much as the method.** Tree-of-Thought cost 9× more per solve on Llama-2 than on Mistral, with identical code.
 
 *Caveats: 34 runs per method is directional, not statistical. Two 7B models from 2023. Game of 24 was out of reach, so the math family contributes almost nothing. Timings include GPU queue time.*
 

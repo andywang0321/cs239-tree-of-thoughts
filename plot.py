@@ -8,7 +8,7 @@ Every figure breaks the result down by task family (Game of 24 / coding / letter
 model, so no bar or box pools three very different tasks together:
     visuals/success-rate.png    solve rate: grouped by method, then model, then 3 family bars
     visuals/tokens.png          tokens per run, same grouping
-    visuals/tokens-solved.png   the same, keeping only runs that solved the task
+    visuals/wall-time.png       wall-clock seconds per run, same grouping
 """
 import argparse
 import json
@@ -114,8 +114,9 @@ def fig_success_rate(df, outdir, path="success-rate.png"):
     return _save(fig, outdir, path)
 
 
-def fig_tokens(df, outdir, path="tokens.png", solved_only=False):
-    """Same grouping (method -> model -> family), showing the spread of generated tokens
+def fig_per_run(df, outdir, metric="gen_tokens", ylabel="generated tokens per run",
+                title="Tokens spent per run", path="tokens.png"):
+    """Same grouping (method -> model -> family), showing the spread of a per-run metric
     as a bar to the mean plus a min-max whisker."""
     models = sorted(df["model"].unique())
     fig, ax = plt.subplots(figsize=(10, 5))
@@ -124,50 +125,25 @@ def fig_tokens(df, outdir, path="tokens.png", solved_only=False):
         for pi, mod in enumerate(models):
             x0 = mi + (pi - .5) * (3 * bar_w + 2 * pad)
             for fi, k in enumerate(KINDS):
-                vals = df[(df.method == m) & (df.kind == k) & (df.model == mod)]["gen_tokens"]
-                if solved_only:
-                    vals = df[(df.method == m) & (df.kind == k) & (df.model == mod) &
-                              df.solved]["gen_tokens"]
+                vals = df[(df.method == m) & (df.kind == k) & (df.model == mod)][metric]
                 x = x0 + fi * (bar_w + pad)
                 if len(vals):
                     mean = vals.mean()
                     ax.bar(x, mean, bar_w, color=MCOLOR[mod], edgecolor="white", linewidth=1.1)
                     ax.errorbar(x, mean, yerr=[[mean - vals.min()], [vals.max() - mean]],
                                 fmt="none", ecolor="#333", elinewidth=1, capsize=2)
-                else:
-                    ax.text(x, 25, "0", ha="center", fontsize=7.5, color="#999")
+                    if mean > 0:
+                        ax.text(x, mean, f"{mean:.0f}", ha="center", va="bottom",
+                                fontsize=6.5, color="#333")
     ax.set_xticks(range(len(METHODS)))
     ax.set_xticklabels([NAMES[m] for m in METHODS], fontsize=10)
-    ax.set_ylabel("generated tokens per run")
-    ax.set_title("Tokens spent per run, by method, model and task family\n"
-                 "(bar = mean, whisker = min to max)", fontsize=13)
+    ax.set_ylabel(ylabel)
+    ax.set_title(f"{title}\n(bar = mean, whisker = min to max)", fontsize=13)
     ax.legend(handles=[Patch(facecolor=MCOLOR[mod], edgecolor="white", label=MODELS[mod])
                        for mod in models],
               title="", loc="upper left", frameon=False, fontsize=10, ncol=2)
     ax.text(.5, -.17, "within each bar group:  Game of 24  |  coding  |  letter counting",
             transform=ax.transAxes, ha="center", fontsize=9, color="#666")
-    return _save(fig, outdir, path)
-
-
-def fig_cost_quality(g, outdir, path="cost-quality.png"):
-    """Aggregate view, kept for reference: solve rate against tokens spent per solved task."""
-    fig, ax = plt.subplots(figsize=(9, 6))
-    plot = g.dropna(subset=["tok_per_solve"])
-    for m in METHODS:
-        sub = plot[plot.method == m]
-        if len(sub):
-            ax.plot(sub["tok_per_solve"], sub["rate"], marker="o", ls="", color="#333",
-                    markersize=15, markeredgecolor="black", markeredgewidth=.7,
-                    label=NAMES[m], zorder=3)
-    for _, r in plot.iterrows():
-        ax.annotate(f"{NAMES[r['method']].split(' ')[0]}\n{MODELS[r['model']]}",
-                    (r["tok_per_solve"], r["rate"]), xytext=(0, 14),
-                    textcoords="offset points", ha="center", fontsize=8, color="#444")
-    ax.set(xscale="log", xlabel="generated tokens per solved task (log scale)",
-           ylabel="share of all 17 tasks solved", ylim=(-.06, 1.05))
-    ax.set_title("Quality against cost, all task families pooled\n"
-                 "(the per-family figures are the honest view)", fontsize=12)
-    ax.legend(fontsize=9.5, loc="upper left", frameon=True)
     return _save(fig, outdir, path)
 
 
@@ -268,8 +244,9 @@ def main():
     if not a.no_figure:
         os.makedirs(a.outdir, exist_ok=True)
         fig_success_rate(df, a.outdir)
-        fig_tokens(df, a.outdir)
-        fig_tokens(df, a.outdir, solved_only=True, path="tokens-solved.png")
+        fig_per_run(df, a.outdir)
+        fig_per_run(df, a.outdir, metric="seconds", ylabel="wall-clock seconds per run",
+                    title="Wall-clock time per run", path="wall-time.png")
     table(df, g)
     if a.tables:
         markdown(df, g, a.tables, a.results)

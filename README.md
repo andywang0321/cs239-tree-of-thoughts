@@ -302,7 +302,7 @@ its own instead of squeezed into a grid. Every datapoint stays separated by task
 |---|---|
 | `visuals/success-rate.png` | Solve rate, grouped by method, then model, then the 3 task families |
 | `visuals/tokens.png` | Tokens per run, same grouping (bar = mean, whisker = min-max) |
-| `visuals/tokens-solved.png` | The same, keeping only runs that solved the task |
+| `visuals/wall-time.png` | Wall-clock seconds per run, same grouping |
 | `visuals/TABLES.md` | The tables as markdown, including a per-task breakdown |
 
 Each method shows two model bars (one colour per model), and each of those splits into three skinny
@@ -408,7 +408,7 @@ plot.py     the figures: solve rate, cost per solve, per family, token placement
 
 papers/     the three papers, plus my extracted text copies for grepping
 data/       results.json (laptop reference), results-full.json (GPU run), smoke.json, answers-*.md
-visuals/    success-rate.png, tokens.png, tokens-solved.png, TABLES.md
+visuals/    success-rate.png, tokens.png, wall-time.png, TABLES.md
 slides/     deck.md (Marp, Beam theme vendored in slides/themes/beam.css)
 ```
 
