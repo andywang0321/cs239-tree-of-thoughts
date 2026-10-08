@@ -3,3 +3,5 @@
 __pycache__/
 *.pyc
 .mplcache/
+.npmcache/
+slides/*.pdf

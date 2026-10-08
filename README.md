@@ -296,19 +296,18 @@ uv run plot.py --results data/results-full.json --tables visuals/TABLES.md
 
 `plot.py` prints the same summary table as `run.py`, so you can check the numbers before you trust
 the picture. It writes one standalone figure per result into `visuals/`, each sized to be readable on
-its own instead of squeezed into a grid:
+its own instead of squeezed into a grid. Every datapoint stays separated by task:
 
 | File | What it shows |
 |---|---|
-| `visuals/solve-rate.png` | Solve rate by method, split by model |
-| `visuals/cost-quality-tokens.png` | Solve rate against generated tokens *per solved task*, with a Pareto frontier |
-| `visuals/cost-quality-seconds.png` | The same trade measured in wall-clock seconds |
-| `visuals/by-family.png` | Solve rate per task family |
-| `visuals/tokens-per-task.png` | Token distribution split by whether the task was solved |
-| `visuals/TABLES.md` | The same tables as markdown, for slides |
+| `visuals/per-task-matrix.png` | One dot per task × method × model: who solved what |
+| `visuals/per-task-cost.png` | Tokens spent on each task, filled = solved, hollow = failed |
+| `visuals/cost-quality.png` | Aggregate: solve rate against tokens per solved task |
+| `visuals/TABLES.md` | The tables as markdown, including a per-task breakdown |
 
-`cost-quality-tokens.png` is the one that carries the argument. Use `--outdir` to send them
-elsewhere, or `--no-figure` for tables only.
+The two `per-task-*` figures are the important ones: pooling across tasks hides the fact that six of
+the seventeen tasks were solved by nobody, and that each method owns different tasks. Use `--outdir`
+to send figures elsewhere, or `--no-figure` for tables only.
 
 Better still, copy the results file back to your laptop and plot there:
 
