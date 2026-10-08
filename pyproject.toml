@@ -4,5 +4,7 @@ description = "Compare linear feedback, retries-with-a-verifier, and tree search
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
+    "matplotlib>=3.10.9",
     "openai>=3.26.0",
+    "seaborn>=0.13.2",
 ]

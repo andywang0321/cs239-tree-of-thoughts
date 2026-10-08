@@ -10,6 +10,7 @@ import argparse
 import json
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 import methods
 from tasks import TASKS
@@ -85,6 +86,8 @@ def main():
     ap.add_argument("--expand", type=int, default=2, help="tree: children per node")
     ap.add_argument("--beam", type=int, default=2, help="tree: partials kept per level")
     ap.add_argument("--max-calls", type=int, default=60, help="hard cap of model calls per task")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="runs in parallel; raise it on a big GPU, keep 1 on a laptop")
     ap.add_argument("--show", action="store_true", help="print each answer")
     ap.add_argument("--answers", default="", help="also dump every answer to this file")
     ap.add_argument("--selftest", action="store_true", help="check all verifiers offline, no model")
@@ -103,25 +106,32 @@ def main():
     for kind in a.kinds:
         tasks += [t for t in TASKS if t.kind == kind][: a.n]
 
+    kwargs = {"iters": a.iters, "n": a.candidates, "expand": a.expand, "beam": a.beam}
+    if a.depth:
+        kwargs["depth"] = a.depth
+    work = [(m, s, t) for m in a.models for s in a.steps for t in tasks]
+
     print(f"{len(a.models)} models x {len(a.steps)} methods x {len(tasks)} tasks"
-          f" = {len(a.models) * len(a.steps) * len(tasks)} runs\n")
+          f" = {len(work)} runs, {a.jobs} at a time\n")
     rows, t_start = [], time.time()
-    for model in a.models:
-        for step in a.steps:
-            for t in tasks:
-                kwargs = {"iters": a.iters, "n": a.candidates, "expand": a.expand, "beam": a.beam}
-                if a.depth:
-                    kwargs["depth"] = a.depth
-                out, cost = methods.solve(step, t, model, a.max_calls, **kwargs)
-                solved = t.final(out)
-                rows.append(dict(model=model, method=step, task=t.id, kind=t.kind,
-                                 solved=solved, answer=out.strip(), **cost))
-                tail = (out.strip().splitlines() or [""])[-1][:60]
-                print(f"  {model:22} {step:9} {t.id:26} {'PASS' if solved else 'fail':4} "
-                      f"{cost['calls']:2} calls {cost['gen_tokens']:5} gen-tok "
-                      f"{cost['seconds']:6.1f}s  {tail}")
-                if a.show:
-                    print("\n".join("      | " + l for l in out.strip().splitlines()[:14]))
+    done = 0
+
+    def one(item):
+        model, step, t = item
+        out, cost = methods.solve(step, t, model, a.max_calls, **kwargs)
+        return dict(model=model, method=step, task=t.id, kind=t.kind,
+                    solved=t.final(out), answer=out.strip(), **cost)
+
+    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
+        for r in pool.map(one, work):
+            rows.append(r)
+            done += 1
+            tail = (r["answer"].strip().splitlines() or [""])[-1][:56]
+            print(f"[{done:3}/{len(work)}] {r['model']:22} {r['method']:9} {r['task']:26} "
+                  f"{'PASS' if r['solved'] else 'fail':4} {r['calls']:2} calls "
+                  f"{r['gen_tokens']:5} gen-tok {r['seconds']:6.1f}s  {tail}")
+            if a.show:
+                print("\n".join("      | " + l for l in r["answer"].splitlines()[:14]))
 
     with open(a.out, "w") as f:
         json.dump(rows, f, indent=1)

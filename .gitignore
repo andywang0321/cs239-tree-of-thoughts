@@ -2,3 +2,4 @@
 .uvcache/
 __pycache__/
 *.pyc
+.mplcache/

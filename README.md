@@ -71,6 +71,7 @@ server.
 --candidates 3         # retry: independent attempts (the paper's SR@1 -> SR@5 story)
 --depth 3 --expand 2 --beam 2   # tree: levels, children per node, partials kept
 --max-calls 60         # hard per-task cap so one bad run cannot eat the budget
+--jobs 8               # run several tasks concurrently; raise on a big GPU, keep 1 on a laptop
 --show                 # print every model answer (good for the live demo)
 --answers answers.md   # dump every full answer, timestamped by run
 --out results.json
@@ -87,6 +88,126 @@ Sanity-check that every verifier still accepts its known-good answer, with no mo
 ```bash
 uv run run.py --selftest     # verifiers: 19/19 accept their golden answer
 ```
+
+## Running it on the GPU box
+
+Everything below is one-time setup. No code changes are needed to switch machines: the client reads
+`BASE_URL` and `API_KEY` from the environment and passes `--models` straight to the server.
+
+### 1. Install uv and the project
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.local/bin/env              # or: export PATH="$HOME/.local/bin:$PATH"
+git clone <your-repo-url> tot && cd tot
+uv sync                              # creates .venv with openai + seaborn + matplotlib
+uv run run.py --selftest             # verifiers work with no model and no network
+```
+
+`uv sync` also installs the plotting dependencies, so you can render figures on the server or copy
+`results.json` back and plot locally. If `$HOME` is not writable on the box, `plot.py` handles it by
+keeping the matplotlib and fontconfig caches in `.mplcache/` beside the script.
+
+### 2. Install Ollama and start it as a service
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+sudo systemctl status ollama         # the installer starts it for you
+```
+
+Configure it for a headless box, then restart:
+
+```bash
+sudo systemctl edit ollama --force --full     # paste the unit below
+```
+
+```ini
+[Service]
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Environment="OLLAMA_MODELS=/data/ollama/models"   # point this at the big disk, not $HOME
+Environment="OLLAMA_KEEP_ALIVE=30m"               # keep weights resident between runs
+Environment="OLLAMA_NUM_PARALLEL=4"               # serve concurrent requests (see --jobs below)
+Environment="OLLAMA_MAX_LOADED_MODELS=2"          # both 7B models fit at once on a 6000-class card
+```
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+curl -s http://127.0.0.1:11434/api/version        # sanity check
+```
+
+Verify the GPU is actually being used and not silently falling back to CPU:
+
+```bash
+nvidia-smi                                   # should show ollama using most of the VRAM
+ollama run llama2:7b-chat "say hi"           # then, in another shell:
+ollama ps                                    # PROCESSOR must read 100% GPU, not "100% CPU"
+```
+
+If `ollama ps` says CPU, your driver/CUDA runtime is wrong; fix that before running the sweep,
+because a CPU fallback is 20-50x slower and will make the cost-per-second column meaningless.
+
+### 3. Pull the two 2023 models
+
+```bash
+ollama pull llama2:7b-chat        # ~3.8 GB
+ollama pull mistral:7b-instruct   # ~4.4 GB
+ollama list
+```
+
+The names above are what `run.py` defaults to. If you use a different tag, pass it through `--models`.
+
+### 4. Smoke test before the sweep
+
+Run the two cheapest methods on one task per family and confirm the numbers look sane. If the
+`PROCESSOR` column shows GPU and the tokens/sec are in the hundreds, you are ready.
+
+```bash
+uv run run.py --models llama2:7b-chat mistral:7b-instruct --n 1 \
+  --steps baseline retry --jobs 4 --out smoke.json
+```
+
+Watch the `sec/run` and `gen-tok` columns in the summary: divide generated tokens by seconds to get
+your real throughput, then use it to size the full run. The reference sweep generated roughly 600k
+tokens for `--n 6` across two models, so at 400 tok/s that is about 25 minutes of pure generation.
+
+### 5. The full sweep
+
+```bash
+uv run run.py \
+  --models llama2:7b-chat mistral:7b-instruct \
+  --n 6 \
+  --jobs 6 \
+  --out results-full.json \
+  --answers answers-full.md
+```
+
+`--jobs` is the only knob that changes with the hardware. Ollama serves each model with
+`OLLAMA_NUM_PARALLEL` slots, so keep `--jobs` at or below `NUM_PARALLEL x number of loaded models`,
+or requests will queue and the wall-clock column will look worse than the tokens column suggests.
+Note that every run inside one process shares nothing but the HTTP server, so `--jobs` is safe.
+
+For a longer or shorter study, vary only `--n` (tasks per family, max 8 math / 5 program / 6 writing)
+and `--candidates`/`--iters` if you want to push the retry and refine arms harder.
+
+### 6. Plot
+
+```bash
+uv run plot.py --results results-full.json --out comparison.png
+uv run plot.py --results results-full.json --metric seconds --out comparison-seconds.png
+```
+
+`plot.py` prints the same summary table as `run.py`, so you can check the numbers before you trust
+the picture. Better still, copy the results file back to your laptop and plot there:
+
+```bash
+scp gpu-box:~/tot/results-full.json .
+uv run plot.py --results results-full.json
+```
+
+The figure has four panels: (a) solve rate by method and model, (b) solve rate against generated
+tokens *per solved task* with a Pareto frontier, (c) solve rate per task family, and (d) the token
+distribution split by whether the task was solved. Panel (b) is the one that carries the argument.
+
 
 ## Presenting it
 
@@ -159,6 +280,7 @@ tasks.py    19 tasks + their verifiers (tests, exhaustive search, exact answers)
 llm.py      one OpenAI-compatible chat client + the cost bookkeeper
 methods.py  the four reasoning strategies (~120 lines)
 run.py      the experiment: loops, progress lines, results table
+plot.py     the figure: solve rate, cost per solve, per family, token placement
 ```
 
 Papers: `tree-of-thoughts.pdf`, `self-refine.pdf`, `agent-program-repair.pdf`.
