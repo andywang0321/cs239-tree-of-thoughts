@@ -1,8 +1,8 @@
-"""Plot the comparison. One figure, four panels, one story.
+"""Plot the comparison. One figure per panel, sized to be readable on its own, into visuals/.
 
-    uv run plot.py                                   # reads results.json
-    uv run plot.py --results results-full.json
-    uv run plot.py --metric seconds --out cost.png   # swap the cost axis
+    uv run plot.py                                  # data/results.json -> visuals/*.png
+    uv run plot.py --results data/results-full.json --tables visuals/TABLES.md
+    uv run plot.py --results data/results-full.json --no-figure   # tables only
 """
 import argparse
 import json
@@ -28,6 +28,7 @@ PALETTE = {"baseline": "#7f7f7f", "refine": "#D55E00", "retry": "#009E73", "tree
 COST = {"tokens": ("gen_tokens_per_solve", "generated tokens"),
         "seconds": ("seconds_per_solve", "wall-clock seconds")}
 FAMILY = [("math", "Game of 24"), ("program", "Python + tests"), ("writing", "letter counting")]
+SUBTITLE = "Same models, same prompts, same tasks - only the shape of the reasoning loop changes"
 
 
 def load(path):
@@ -59,95 +60,113 @@ def pareto(g, xcol):
     return pd.DataFrame(keep).sort_values(xcol)
 
 
+def pooled(g):
+    p = g.groupby("label").agg(ok=("solved", "sum"), runs=("runs", "sum"),
+                               tok=("gen_tokens", "sum"), secs=("seconds", "sum"),
+                               calls=("calls", "sum"))
+    p["rate"] = p["ok"] / p["runs"]
+    p["tok_per_solve"] = p["tok"] / p["ok"]
+    return p.sort_values("rate", ascending=False)
+
+
 def headline(g):
     """Say what the data actually shows. Compares methods on their pooled runs across models,
     not the single best cell, so a method that wins one column cannot claim the headline."""
-    pooled = g.groupby("label").agg(ok=("solved", "sum"), runs=("runs", "sum"),
-                                    tok=("gen_tokens", "sum"))
-    pooled["rate"] = pooled["ok"] / pooled["runs"]
-    pooled = pooled.sort_values(["rate", "tok"], ascending=[False, True])
-    best, runner = pooled.index[0], pooled.index[1]
-    b, r = pooled.loc[best], pooled.loc[runner]
+    p = pooled(g)
+    best, runner = p.index[0], p.index[1]
+    b, r = p.loc[best], p.loc[runner]
     lead = "leads" if b["rate"] > r["rate"] else "ties"
-    return (f"{best} {lead} on the full task set "
-            f"({b['rate']:.0%} vs {r['rate']:.0%} for {runner})")
+    return f"{best} {lead} on the full task set ({b['rate']:.0%} vs {r['rate']:.0%} for {runner})"
 
 
-def panels(df, g, metric, out):
-    sns.set_theme(style="whitegrid", context="talk", font_scale=0.82)
-    fig, ax = plt.subplots(2, 2, figsize=(16.5, 11))
+# --------------------------------------------------------------------- figures
+def _save(fig, outdir, name):
+    fig.tight_layout()
+    path = os.path.join(outdir, name)
+    fig.savefig(path, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {path}")
+    return path
+
+
+def fig_solve_rate(df, g, outdir):
+    """Who solves more, by method and model."""
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    sns.barplot(g, x="rate", y="label", hue="model", ax=ax,
+                order=[NAMES[m] for m in METHODS], palette="Blues", errorbar=None)
+    for c in ax.containers:
+        ax.bar_label(c, fmt=lambda v: f"{v:.0%}", padding=4, fontsize=11)
+    ax.set(xlabel="share of tasks solved", ylabel="", xlim=(0, 1.14),
+           title=f"Solve rate by method\n{SUBTITLE}")
+    ax.legend(title="", loc="lower right", fontsize=9)
+    return _save(fig, outdir, "solve-rate.png")
+
+
+def fig_cost_quality(g, outdir, metric="tokens"):
+    """The trade: quality bought with compute. The frontier line is the punchline."""
     xcol, xlabel = COST[metric]
+    fig, ax = plt.subplots(figsize=(10, 7))
     plot = g.dropna(subset=[xcol])
-    labels = [NAMES[m] for m in METHODS]
-
-    # (a) headline: who solves more
-    a = ax[0, 0]
-    sns.barplot(g, x="rate", y="label", hue="model", order=labels, ax=a,
-                palette="Blues", errorbar=None)
-    for c in a.containers:
-        a.bar_label(c, fmt=lambda v: f"{v:.0%}", padding=4, fontsize=11)
-    a.set(xlabel="share of tasks solved", ylabel="", xlim=(0, 1.14), title="(a) Solve rate")
-    a.legend(title="", loc="lower right", fontsize=9)
-
-    # (b) the trade: quality bought with compute
-    b = ax[0, 1]
     for m in METHODS:
         sub = plot[plot["method"] == m]
-        if not len(sub):
-            continue
-        b.plot(sub[xcol], sub["rate"], "o", color=PALETTE[m], markersize=14, zorder=3,
-               markeredgecolor="black", markeredgewidth=.7, label=NAMES[m])
+        if len(sub):
+            ax.plot(sub[xcol], sub["rate"], "o", color=PALETTE[m], markersize=15, zorder=3,
+                    markeredgecolor="black", markeredgewidth=.7, label=NAMES[m])
     front = pareto(g, xcol)
     if len(front) > 1:
-        b.plot(front[xcol], front["rate"], "k--", lw=1.5, alpha=.75, zorder=2)
-        b.plot([], [], "k--", lw=1.5, label="Pareto frontier")
-    b.legend(fontsize=9, loc="lower right", frameon=True, title="", title_fontsize=9)
-    dropped = len(g) - len(plot)
-    b.set(xscale="log", xlabel=f"{xlabel} per solved task (log scale)", ylabel="share solved",
-          ylim=(-.09, 1.15), title="(b) What a solve costs")
-    if dropped:
-        b.text(.98, .04, f"{dropped} run(s) solved nothing and cannot be placed",
-               transform=b.transAxes, ha="right", fontsize=9, style="italic", color="#555")
+        ax.plot(front[xcol], front["rate"], "k--", lw=1.6, alpha=.75, zorder=2)
+        ax.plot([], [], "k--", lw=1.6, label="Pareto frontier")
+    for _, r in plot.iterrows():
+        ax.annotate(r["model"].split(":")[0], (r[xcol], r["rate"]), xytext=(0, 13),
+                    textcoords="offset points", ha="center", fontsize=8.5, color="#444")
+    ax.set(xscale="log", xlabel=f"{xlabel} per solved task (log scale)", ylabel="share of tasks solved",
+           ylim=(-.06, 1.0), title=f"Quality against cost\n{SUBTITLE}")
+    ax.legend(fontsize=10, loc="upper left", frameon=True)
+    if len(g) - len(plot):
+        ax.text(.98, .04, f"{len(g) - len(plot)} run(s) solved nothing and cannot be placed",
+                transform=ax.transAxes, ha="right", fontsize=9, style="italic", color="#555")
+    return _save(fig, outdir, f"cost-quality-{metric}.png")
 
-    # (c) where each method stands per task family
-    c = ax[1, 0]
+
+def fig_by_family(df, outdir):
+    """Where each method stands per task family - the per-task breakdown."""
     order = [k for k, _ in FAMILY if k in set(df["kind"])]
     fam = df.pivot_table(index="label", columns="kind", values="solved", aggfunc="mean")
-    fam = fam.reindex([n for n in labels if n in fam.index])[order]
-    sns.heatmap(fam, annot=True, fmt=".0%", cmap="RdYlGn", vmin=0, vmax=1, ax=c,
-                cbar=False, linewidths=1.5, linecolor="white", annot_kws={"fontsize": 14})
-    c.set_xticklabels([dict(FAMILY)[k] for k in order], rotation=0)
-    c.set(xlabel="", ylabel="", title="(c) Solve rate by task family")
+    fam = fam.reindex([n for n in (NAMES[m] for m in METHODS) if n in fam.index])[order]
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    sns.heatmap(fam, annot=True, fmt=".0%", cmap="RdYlGn", vmin=0, vmax=1, ax=ax,
+                cbar=False, linewidths=1.5, linecolor="white", annot_kws={"fontsize": 15})
+    ax.set_xticklabels([dict(FAMILY)[k] for k in order], rotation=0)
+    ax.set(xlabel="", ylabel="", title=f"Solve rate by task family\n{SUBTITLE}")
+    return _save(fig, outdir, "by-family.png")
 
-    # (d) do the extra tokens land on solves or on dead ends?
-    d = ax[1, 1]
+
+def fig_tokens(df, outdir):
+    """Do the extra tokens land on solves, or on longer failures?"""
     box = df[df["gen_tokens"] > 0].copy()
     box["outcome"] = box["solved"].map({True: "solved", False: "gave up"})
+    labels = [NAMES[m] for m in METHODS]
+    fig, ax = plt.subplots(figsize=(11, 6))
     with warnings.catch_warnings():  # seaborn sets a non-positive xlim on log axes; harmless
         warnings.simplefilter("ignore")
-        sns.boxplot(box, x="label", y="gen_tokens", hue="outcome", order=labels, ax=d,
+        sns.boxplot(box, x="label", y="gen_tokens", hue="outcome", order=labels, ax=ax,
                     hue_order=["solved", "gave up"],
                     palette={"solved": "#009E73", "gave up": "#B0B0B0"},
                     width=.62, fliersize=0, linewidth=1)
-        sns.stripplot(box, x="label", y="gen_tokens", hue="outcome", order=labels, ax=d,
+        sns.stripplot(box, x="label", y="gen_tokens", hue="outcome", order=labels, ax=ax,
                       hue_order=["solved", "gave up"],
                       palette={"solved": "#00543C", "gave up": "#777777"},
                       dodge=True, size=5, alpha=.85, legend=False, edgecolor="white", linewidth=.6)
-        d.set_yscale("log")
-    d.set(xlabel="", ylabel="generated tokens per task (log scale)",
-          title="(d) Where the tokens go")
-    d.tick_params(axis="x", labelrotation=15)
-    handles = [h for h in d.get_legend().legend_handles] if d.get_legend() else []
-    d.legend(handles[:2], ["solved", "gave up"], title="", fontsize=10, loc="upper left")
-
-    fig.suptitle(headline(g) + "\nSame models, same prompts, same tasks - only the shape of the "
-                 "reasoning loop changes", fontsize=16.5, fontweight="bold")
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
-    fig.savefig(out, dpi=170, bbox_inches="tight")
-    print(f"wrote {out}")
-    return plot
+        ax.set_yscale("log")
+    ax.set(xlabel="", ylabel="generated tokens per task (log scale)",
+           title=f"Where the tokens go\n{SUBTITLE}")
+    ax.tick_params(axis="x", labelrotation=12)
+    handles = [h for h in ax.get_legend().legend_handles] if ax.get_legend() else []
+    ax.legend(handles[:2], ["solved", "gave up"], title="", fontsize=10, loc="upper left")
+    return _save(fig, outdir, "tokens-per-task.png")
 
 
+# ---------------------------------------------------------------------- tables
 def table(df, g):
     """Print the two tables that carry the argument: solve rate, then cost per solve."""
     per = g.pivot_table(index="label", columns="model", values="rate", aggfunc="sum")
@@ -171,24 +190,23 @@ def table(df, g):
 def markdown(df, g, path):
     """Write the two headline tables as markdown, for slides, the README, or the demo notes."""
     order = [NAMES[m] for m in METHODS if NAMES[m] in set(g["label"])]
-    lines = ["<!-- generated by: uv run plot.py --results results-full.json --tables TABLES.md -->", ""]
+    models = sorted(df["model"].unique())
+    lines = [f"<!-- generated by: uv run plot.py --results {path.replace('visuals/', 'data/')} -->", ""]
 
-    lines += ["### Solve rate", "", "| Method | " + " | ".join(sorted(df["model"].unique()))
-              + " | Overall |", "|---|" + "---|" * (df["model"].nunique() + 1)]
+    lines += ["### Solve rate", "", "| Method | " + " | ".join(models)
+              + " | Overall |", "|---|" + "---|" * (len(models) + 1)]
     for name in order:
-        row = [f"{g[(g.label == name) & (g.model == m)]['rate'].mean():.0%}"
-               for m in sorted(df["model"].unique())]
+        row = [f"{g[(g.label == name) & (g.model == m)]['rate'].mean():.0%}" for m in models]
         lines.append(f"| {name} | " + " | ".join(row)
                      + f" | {df[df.label == name]['solved'].mean():.0%} |")
 
     lines += ["", "### Cost per solved task (generated tokens)", "",
-              "| Method | " + " | ".join(sorted(df["model"].unique()))
-              + " | Overall | Calls/run | Sec/run |", "|---|" + "---|" * (df["model"].nunique() + 3)]
+              "| Method | " + " | ".join(models)
+              + " | Overall | Calls/run | Sec/run |", "|---|" + "---|" * (len(models) + 3)]
     for name in order:
         cells = []
-        for m in sorted(df["model"].unique()):
-            r = g[(g.label == name) & (g.model == m)]
-            v = r["gen_tokens_per_solve"].iloc[0]
+        for m in models:
+            v = g[(g.label == name) & (g.model == m)]["gen_tokens_per_solve"].iloc[0]
             cells.append("not solved" if pd.isna(v) else f"{v:,.0f}")
         sub = df[df.label == name]
         ok = sub["solved"].sum()
@@ -206,23 +224,27 @@ def markdown(df, g, path):
 
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"\nwrote {path}")
+    print(f"wrote {path}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results", default="results.json")
-    ap.add_argument("--metric", default="tokens", choices=list(COST))
-    ap.add_argument("--out", default="comparison.png")
+    ap.add_argument("--results", default="data/results.json", help="run output to read")
+    ap.add_argument("--outdir", default="visuals", help="where the figures go")
     ap.add_argument("--tables", metavar="TABLES.md", help="also write the tables as markdown")
     ap.add_argument("--no-figure", action="store_true", help="tables only")
     a = ap.parse_args()
+    sns.set_theme(style="whitegrid", context="talk", font_scale=0.9)
     df = load(a.results)
     g = summary(df)
+    print(f"{a.results}: {len(df)} runs, {df['solved'].sum()} solved\nheadline: {headline(g)}")
     if not a.no_figure:
-        panels(df, g, a.metric, a.out)
-    else:
-        print(f"\n=== solve rate ===")
+        os.makedirs(a.outdir, exist_ok=True)
+        fig_solve_rate(df, g, a.outdir)
+        fig_cost_quality(g, a.outdir, "tokens")
+        fig_cost_quality(g, a.outdir, "seconds")
+        fig_by_family(df, a.outdir)
+        fig_tokens(df, a.outdir)
     table(df, g)
     if a.tables:
         markdown(df, g, a.tables)

@@ -38,13 +38,13 @@ minutes. Time budget estimates:
 | `--n 1`, `llama3.2:latest` (3B) | 12 | ~7 min |
 
 On the RTX box with vLLM, plan on minutes rather than hours: the reference run above moved ~10k
-generated tokens in 42 minutes on the laptop, which is a few seconds of GPU time. `results.json` and
-`demo-answers.md` in this repo are the output of the reference run.
+generated tokens in 42 minutes on the laptop, which is a few seconds of GPU time. `data/results.json` and
+`data/demo-answers.md` are the output of the reference run.
 
 Re-print the table from a finished run without re-running anything:
 
 ```bash
-uv run run.py --summary results.json --models llama2:7b-chat mistral:7b-instruct
+uv run run.py --summary data/results-full.json --models llama2:7b-chat mistral:7b-instruct
 ```
 
 ### On a CUDA box (vLLM, much faster)
@@ -73,8 +73,8 @@ server.
 --max-calls 60         # hard per-task cap so one bad run cannot eat the budget
 --jobs 8               # run several tasks concurrently; raise on a big GPU, keep 1 on a laptop
 --show                 # print every model answer (good for the live demo)
---answers answers.md   # dump every full answer, timestamped by run
---out results.json
+--answers data/answers.md   # dump every full answer
+--out data/results.json
 ```
 
 A fast dry run that still produces the full table (~7 min on a 3B model, M2):
@@ -105,7 +105,7 @@ uv run run.py --selftest             # verifiers work with no model and no netwo
 ```
 
 `uv sync` also installs the plotting dependencies, so you can render figures on the server or copy
-`results.json` back and plot locally. If `$HOME` is not writable on the box, `plot.py` handles it by
+`data/results-full.json` back and plot locally. If `$HOME` is not writable on the box, `plot.py` handles it by
 keeping the matplotlib and fontconfig caches in `.mplcache/` beside the script.
 
 ### 2. Install Ollama and start it as a service
@@ -262,7 +262,7 @@ Run the two cheapest methods on one task per family and confirm the numbers look
 
 ```bash
 uv run run.py --models llama2:7b-chat mistral:7b-instruct --n 1 \
-  --steps baseline retry --jobs 4 --out smoke.json
+  --steps baseline retry --jobs 4 --out data/smoke.json
 ```
 
 Watch the `sec/run` and `gen-tok` columns in the summary: divide generated tokens by seconds to get
@@ -276,8 +276,8 @@ uv run run.py \
   --models llama2:7b-chat mistral:7b-instruct \
   --n 6 \
   --jobs 6 \
-  --out results-full.json \
-  --answers answers-full.md
+  --out data/results-full.json \
+  --answers data/answers-full.md
 ```
 
 `--jobs` is the only knob that changes with the hardware. Ollama serves each model with
@@ -291,32 +291,42 @@ and `--candidates`/`--iters` if you want to push the retry and refine arms harde
 ### 6. Plot
 
 ```bash
-uv run plot.py --results results-full.json --out comparison.png
-uv run plot.py --results results-full.json --metric seconds --out comparison-seconds.png
+uv run plot.py --results data/results-full.json --tables visuals/TABLES.md
 ```
 
 `plot.py` prints the same summary table as `run.py`, so you can check the numbers before you trust
-the picture. Better still, copy the results file back to your laptop and plot there:
+the picture. It writes one standalone figure per result into `visuals/`, each sized to be readable on
+its own instead of squeezed into a grid:
+
+| File | What it shows |
+|---|---|
+| `visuals/solve-rate.png` | Solve rate by method, split by model |
+| `visuals/cost-quality-tokens.png` | Solve rate against generated tokens *per solved task*, with a Pareto frontier |
+| `visuals/cost-quality-seconds.png` | The same trade measured in wall-clock seconds |
+| `visuals/by-family.png` | Solve rate per task family |
+| `visuals/tokens-per-task.png` | Token distribution split by whether the task was solved |
+| `visuals/TABLES.md` | The same tables as markdown, for slides |
+
+`cost-quality-tokens.png` is the one that carries the argument. Use `--outdir` to send them
+elsewhere, or `--no-figure` for tables only.
+
+Better still, copy the results file back to your laptop and plot there:
 
 ```bash
-scp gpu-box:~/tot/results-full.json .
-uv run plot.py --results results-full.json
+scp gpu-box:~/tot/data/results-full.json data/
+uv run plot.py --results data/results-full.json
 ```
-
-The figure has four panels: (a) solve rate by method and model, (b) solve rate against generated
-tokens *per solved task* with a Pareto frontier, (c) solve rate per task family, and (d) the token
-distribution split by whether the task was solved. Panel (b) is the one that carries the argument.
 
 
 ## Presenting it
 
 1. **The pitch** (1 min): same model, same prompts, same tasks — only the shape of the loop changes.
    `refine` and `retry` are both linear; only `retry` has a symbolic verifier; only `tree` branches.
-2. **The traces** (3 min): the sweep already wrote every raw answer to `demo-answers.md`; scroll
+2. **The traces** (3 min): the sweep already wrote every raw answer to `data/answers-full.md`; scroll
    through it live. Show the `mistral`+`tree` answer that claims 24 for an expression equal to 18,
    then the `llama2` answer that invents numbers and never converges.
-3. **The table** (3 min): `uv run run.py --summary results.json --models llama2:7b-chat
-   mistral:7b-instruct` re-prints it instantly — no model calls. Lead with solve rate, then
+3. **The table** (3 min): `uv run run.py --summary data/results-full.json --models
+   llama2:7b-chat mistral:7b-instruct` re-prints it instantly — no model calls. Lead with solve rate, then
    generated tokens per *solved* task, then wall clock.
 4. **The punchline** (3 min): the cheapest structure won, because the verifier — not the tree — is
    what turned extra compute into accuracy. That is the APR paper's 28.5% → 43.9% → 61.0% story in
@@ -338,15 +348,16 @@ distribution split by whether the task was solved. Panel (b) is the one that car
   `retry --candidates 3`, so total attempts are roughly matched. `tree` also gets a hard
   `--max-calls` budget, which is why it stops after ~7 calls instead of exploding combinatorially.
 
-## Main run (2 × 7B models, 19 tasks, 136 runs, 2 × RTX PRO 6000 Blackwell, ~20 min)
+## Main run (2 × 7B models, 17 tasks, 136 runs, 2 × RTX PRO 6000 Blackwell, ~20 min)
 
-The full task set: 6 × Game of 24, 5 × Python-with-tests, 6 × letter counting, per model per method.
+17 tasks per method per model: 6 × Game of 24 (of the 8 available), 5 × Python-with-tests, 6 × letter
+counting. 136 runs in total.
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 OLLAMA_NUM_PARALLEL=4 OLLAMA_KEEP_ALIVE=30m uv run run.py \
   --models llama2:7b-chat mistral:7b-instruct --steps baseline refine retry tree \
-  --n 6 --jobs 6 --out results-full.json --answers answers-full.md
-uv run plot.py --results results-full.json --out comparison.png --tables TABLES.md
+  --n 6 --jobs 6 --out data/results-full.json --answers data/answers-full.md
+uv run plot.py --results data/results-full.json --tables visuals/TABLES.md
 ```
 
 | Method | llama2:7b-chat | mistral:7b-instruct | Overall | tokens/solve | calls/run | sec/run |
@@ -375,7 +386,7 @@ What this run says, and where it differs from the laptop:
 3. **Self-Refine loses to one-shot on both models** (18% vs 21%). Linear self-critique, at 5.7x the
    calls and 5.9x the tokens, produced no net gain — the model's critique is only as good as the
    model.
-4. **Game of 24 is out of reach for 7B models.** 71 of 72 attempts failed; ToT's single success is
+4. **Game of 24 is out of reach for 7B models.** 47 of 48 attempts failed; ToT's single success is
    the only one. Verified it is not a format artifact: an unlabeled-answer scan found zero correct
    solutions rejected for missing the `Answer:` line.
 
@@ -389,12 +400,17 @@ after 1252 generated tokens. Fluency is not correctness, and that is the case fo
 ## Repository
 
 ```
-tasks.py    19 tasks + their verifiers (tests, exhaustive search, exact answers) - the ground truth
+tasks.py    19 defined tasks + their verifiers (tests, exhaustive search, exact answers)
 llm.py      one OpenAI-compatible chat client + the cost bookkeeper
 methods.py  the four reasoning strategies (~120 lines)
 run.py      the experiment: loops, progress lines, results table
 serve.py    start Ollama without root, pull models, verify GPU offload
-plot.py     the figure: solve rate, cost per solve, per family, token placement
+plot.py     the figures: solve rate, cost per solve, per family, token placement
+
+papers/     the three papers, plus my extracted text copies for grepping
+data/       results.json (laptop reference), results-full.json (GPU run), smoke.json, answers-*.md
+visuals/    one PNG per result, plus TABLES.md
+slides/     the demo deck
 ```
 
-Papers: `tree-of-thoughts.pdf`, `self-refine.pdf`, `agent-program-repair.pdf`.
+Papers: `papers/tree-of-thoughts.pdf`, `papers/self-refine.pdf`, `papers/agent-program-repair.pdf`.
