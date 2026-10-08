@@ -114,14 +114,9 @@ Notes:
 
 # Success rate
 
-![w:820](visuals/success-rate.png)
+![w:680](visuals/success-rate.png)
 
-**Findings:**
-- **Agentic-PR wins overall (35%)** and is the strongest method on coding and on counting.
-- **Tree-of-Thought only works on the stronger model** — 53% on Mistral vs 6% on Llama-2, *below* one-shot.
-- **Letter counting separates the methods most**: Agentic-PR 67% vs Baseline 33%.
-- **Game of 24 is a wall**: 1 solve in 48 attempts. The paper's 74% is a GPT-4 result.
-- **Self-Refine never beats Baseline on any family**, and trails it on coding (20% vs 30%).
+**Findings:** Agentic-PR leads overall (35%) and on both coding and counting. Tree-of-Thought only works on the stronger model (53% Mistral vs 6% Llama-2). Game of 24 is a wall: 1 solve in 48.
 
 <!--
 Notes:
@@ -135,13 +130,9 @@ Notes:
 
 # Tokens spent
 
-![w:820](visuals/tokens.png)
+![w:680](visuals/tokens.png)
 
-**Findings:**
-- **Game of 24 costs the most for every method** — and it is the family almost nobody solves.
-- **Tree-of-Thought's cost swings 9× with the model**: 14,045 tokens per solve on Llama-2 vs 1,524 on Mistral, identical code and prompts.
-- **Self-Refine is expensive everywhere** (~3,500 tokens per solve overall) and never beats one-shot.
-- **Agentic-PR is the cheapest route to accuracy**: 1,340 tokens per solve vs Baseline's 606, while solving nearly twice as many tasks.
+**Findings:** Tree-of-Thought's cost swings 9× with the model — 14,045 tokens per solve on Llama-2 vs 1,524 on Mistral, same code. Agentic-PR is the cheapest route to accuracy: 1,340 per solve against Baseline's 606.
 
 <!--
 Notes:
@@ -154,13 +145,9 @@ Notes:
 
 # Wall-clock time
 
-![w:820](visuals/wall-time.png)
+![w:680](visuals/wall-time.png)
 
-**Findings:**
-- **Baseline is 5× faster than Self-Refine** (2.1s vs 10.0s per run) and both are stable across models — time tracks *how many calls* a method makes, not how good it is.
-- **Agentic-PR is the cheapest of the deliberate methods** (6.1s) and is *faster on the stronger model* (4.9s vs 7.3s): better models need fewer retries.
-- **Tree-of-Thought is slowest** (11.2s) and its cost is model-dependent again — 13.7s on Llama-2 vs 8.7s on Mistral.
-- **Game of 24 dominates every method's time budget** (11.3s mean) even though it is almost never solved.
+**Findings:** Baseline 2.1s per run, Agentic-PR 6.1s, Self-Refine 10.0s, Tree-of-Thought 11.2s. Time tracks how many calls a method makes — not how good it is.
 
 <!--
 Notes:
