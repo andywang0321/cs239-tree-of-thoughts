@@ -16,6 +16,8 @@ appendices as needed for questions.
 - Four methods, one axis: two of them generate more text (Self-Refine, Tree-of-Thought), one
   branches, one checks. We want to know which of those is doing the work.
 - Volume: 136 runs, 2 models, 17 tasks, all graded by code rather than by a model.
+- The slide carries the repository link — mention it once, in case anyone wants the code or the raw
+  results while you talk (`github.com/andywang0321/cs239-tree-of-thoughts`).
 - **Keep it short.** The audience needs 30 seconds here, not a minute.
 
 ---

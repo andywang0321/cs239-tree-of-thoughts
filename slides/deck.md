@@ -14,10 +14,8 @@ style: |
   h2 { font-size: 1.25em; }
   table { font-size: 0.85em; }
   th, td { padding: 3px 8px; }
-  /* the task-ID column holds long unbreakable strings; shrink them and keep each ID whole */
+  /* task-ID column: long unbreakable strings, so shrink them and keep each ID whole */
   table code { font-size: 0.68em; white-space: nowrap; }
-  /* the task-ID column holds long unbreakable strings; keep rows on one line */
-  table code { font-size: 0.85em; white-space: nowrap; }
   header, footer {
     font-size: 13px;
     color: #8a8a8a;
@@ -34,9 +32,9 @@ RENDER  (from the repo root - no theme file needed)
 Presenter notes live in HTML comments and never render into the PDF.
 -->
 
-<!-- Presenter notes live in HTML comments and never render into the PDF. -->
-
 # Should Agents Reason Linearly or as a Tree?
+
+<https://github.com/andywang0321/cs239-tree-of-thoughts>
 
 Baseline (IO) vs. Self-Refine vs. Tree-of-Thought vs. Agentic-Program-Repair
 
@@ -128,7 +126,7 @@ Notes:
 - Be upfront: 136 runs is 34 runs per method. Directional, not a significance test.
 - The 60-call cap never bound: ToT averaged 6.9 calls, 10 max.
 - Timings include waiting for a parallel slot, so they are an upper bound on latency.
-- Full hyperparameters are in Appendix C.
+- Full hyperparameters are in Appendix B.
 -->
 
 ---
