@@ -5,7 +5,7 @@ paginate: true
 header: 'Bruce Li, Andy Wang, Cecilia Xu'
 footer: 'UCLA Samueli School of Engineering'
 style: |
-  /* marp's default theme, with small tunings. No external theme file is needed. */
+  /* marp's default theme, with three small tunings. No external theme file is needed. */
   section {
     font-size: 19px;
     padding: 46px 54px;
@@ -13,7 +13,11 @@ style: |
   h1 { font-size: 1.5em; }
   h2 { font-size: 1.25em; }
   table { font-size: 0.85em; }
-  th, td { padding: 3px 10px; }
+  th, td { padding: 3px 8px; }
+  /* the task-ID column holds long unbreakable strings; shrink them and keep each ID whole */
+  table code { font-size: 0.68em; white-space: nowrap; }
+  /* the task-ID column holds long unbreakable strings; keep rows on one line */
+  table code { font-size: 0.85em; white-space: nowrap; }
   header, footer {
     font-size: 13px;
     color: #8a8a8a;
@@ -22,11 +26,6 @@ style: |
   footer { left: 54px; bottom: 14px; right: 54px; }
   section::after { font-size: 13px; bottom: 14px; right: 54px; }
   img { display: block; margin: 8px auto 0 auto; }
-  /* the default theme has no column support; this gives a simple two-column slide */
-  .cols { display: flex; gap: 26px; align-items: flex-start; }
-  .cols > div { flex: 1; min-width: 0; }
-  .cols table { font-size: 0.72em; width: 100%; }
-  .cols code { font-size: 0.9em; word-break: break-all; }
 ---
 
 <!--
@@ -35,17 +34,17 @@ RENDER  (from the repo root - no theme file needed)
 Presenter notes live in HTML comments and never render into the PDF.
 -->
 
+<!-- Presenter notes live in HTML comments and never render into the PDF. -->
+
 # Should Agents Reason Linearly or as a Tree?
 
-**Baseline (IO)** vs. **Self-Refine** vs. **Tree-of-Thought** vs. **Agentic-Program-Repair**
+Baseline (IO) vs. Self-Refine vs. Tree-of-Thought vs. Agentic-Program-Repair
 
 Same models, same prompts, same tasks. Different reasoning loop.
 
-*136 runs · 2 models · 17 verified tasks · 2 × RTX PRO 6000 Blackwell*
-
 ---
 
-## Methods
+# Methods
 
 | Method | Paper | What it does |
 |---|---|---|
@@ -63,7 +62,7 @@ Notes:
 
 ---
 
-## Summary: Agentic Program Repair
+# Summary: Agentic Program Repair
 
 Use deterministic, verifiable tests to determine correctness. Think: Test-Driven Development.
 
@@ -88,41 +87,22 @@ Notes:
 
 ---
 
+# Our Experiments and task distribution
 
----
+| Family | Tasks | How we grade it | Task IDs |
+|---|---|---|---|
+| **Game of 24** | 6 | Exact arithmetic check | `g24-0` … `g24-5` |
+| **Coding** | 5 | **Real unit tests in a subprocess** | `prog-merge_intervals`, `prog-rotate`, `prog-kth_largest`, `prog-parse_formula`, `prog-merge_sorted_arrays` |
+| **Letter counting** | 6 | Exact count | `count-strawberry`, `count-raspberry`, `count-Mississippi`, `count-bookkeeper`, `count-dreadnought`, `count-refrigerator` |
+| **Total** | **17** | | |
 
-## Our Experiments and task distribution
-
-<div class="cols">
-<div>
-
-| Family | Tasks | How we grade it |
-|---|---|---|
-| **Game of 24** | 6 | Exact arithmetic check |
-| **Coding** | 5 | **Real unit tests in a subprocess** |
-| **Letter counting** | 6 | Exact count |
-| **Total** | **17** | |
-
-**Nothing is graded by a model.**
-
-</div>
-<div>
-
-| Family | Task IDs |
-|---|---|
-| Game of 24 | `g24-0` … `g24-5` |
-| Coding | `prog-merge_intervals`, `prog-rotate`, `prog-kth_largest`, `prog-parse_formula`, `prog-merge_sorted_arrays` |
-| Counting | `count-strawberry`, `count-raspberry`, `count-Mississippi`, `count-bookkeeper`, `count-dreadnought`, `count-refrigerator` |
-
-</div>
-</div>
+**Nothing is graded by a model.** Every pass/fail comes from arithmetic, a test run, or a string compare.
 
 Each task gets 8 runs (2 models × 4 methods) → **136 runs**. Six were solved by nobody: `g24-1` … `g24-5` and `prog-parse_formula`.
 
 <!--
 Notes:
-- Left: what each family asks for and how it is graded. The grading is entirely symbolic - arithmetic, real unit tests, exact counts - which is why the pass/fail numbers can be trusted.
-- Right: the 17 task IDs, so any number in this deck traces to a specific task.
+- The grading is entirely symbolic - arithmetic, real unit tests, exact counts - which is why the pass/fail numbers can be trusted.
 - Letter counting is a deliberate trap: these are questions where models confidently say "2 r's in strawberry".
 - The unit tests are the same feedback signal the APR paper uses, in miniature.
 - The suite defines 19 tasks; this run used 6 of the 8 Game of 24 puzzles, so 17 ran. Each family is small, so one solve moves a bar by ~8%.
@@ -131,7 +111,7 @@ Notes:
 
 ---
 
-## Experiment Setup
+# Experiment Setup
 
 | | |
 |---|---|
@@ -148,12 +128,12 @@ Notes:
 - Be upfront: 136 runs is 34 runs per method. Directional, not a significance test.
 - The 60-call cap never bound: ToT averaged 6.9 calls, 10 max.
 - Timings include waiting for a parallel slot, so they are an upper bound on latency.
-- Full hyperparameters are in the appendix.
+- Full hyperparameters are in Appendix C.
 -->
 
 ---
 
-## Success rate
+# Success rate
 
 ![w:750](visuals/success-rate.png)
 
@@ -161,15 +141,15 @@ Notes:
 
 <!--
 Notes:
-- Each method shows two model bars; each splits into three skinny bars for {24, code, count}, in that order.
+- Each method shows two model bars; each of those splits into three skinny bars for {24, code, count}, in that order.
 - The tall bars on the right are Agentic-PR on counting. ToT's only Game of 24 solve is the lone blue sliver.
 - The key takeaway: no method dominates. Each family favours a different strategy.
-- Not a grading bug: we scanned every failed math run for a correct answer rejected for a missing `Answer:` line. Zero found.
+- This is not a grading bug: we scanned every failed math run for a correct answer rejected for a missing `Answer:` line. Zero found.
 -->
 
 ---
 
-## Tokens spent
+# Tokens spent
 
 ![w:750](visuals/tokens.png)
 
@@ -177,15 +157,14 @@ Notes:
 
 <!--
 Notes:
-- Bar height is the mean over every run, whisker spans min to max, so level and spread are both visible.
-- Short Baseline bars are the signature of a method that cannot spend more: it never gets a second attempt.
+- Bar height is the mean over every run, whisker spans min to max, so both level and spread are visible.
+- Bars are short wherever a method answered briefly, which is exactly the Baseline signature: it cannot spend more, because it never gets a second attempt.
 - The headline of the deck: cost is a property of model-plus-method, not of the method alone.
-- Agentic-PR: 1,340 tokens per solve against Baseline's 606, while solving nearly twice as many tasks.
 -->
 
 ---
 
-## Wall-clock time
+# Wall-clock time
 
 ![w:750](visuals/wall-time.png)
 
@@ -194,18 +173,19 @@ Notes:
 <!--
 Notes:
 - Same grouping as the other two figures: method, then model, then the three families.
-- Caveat to state out loud: runs were 6-at-a-time against 4 serving slots, so absolute numbers include queueing. The ordering is the honest part.
-- Agentic-PR beats Self-Refine on time despite making attempts, because it stops as soon as tests pass (mean 2.5 calls).
+- The caveat to state out loud: these runs were 6-at-a-time against 4 serving slots, so the absolute numbers include queueing. The ordering is the honest part.
+- The useful framing: wall-clock is a proxy for API cost. Self-Refine spends 342s total across its 34 runs; Baseline spends 73s. That gap is the price of the critique loop.
+- Notice Agentic-PR beats Self-Refine on time despite making attempts: it stops as soon as tests pass, which is usually attempt 1 or 2 (mean 2.5 calls).
 -->
 
 ---
 
-## What I take away
+# What I take away
 
 1. **Verification is the win, not the tree.** Tests turn extra compute into correct answers. More thinking without a check mostly buys longer wrong answers.
 2. **The methods are not interchangeable.** Agentic-PR owns counting and coding; Tree-of-Thought's best case is a harder task on a stronger model.
 3. **Self-Refine is the weakest link here.** Most expensive, least accurate — worse than one-shot on every family.
-4. **Time tracks the loop, not the result.** Baseline 2.1s per run, Agentic-PR 6.1s, Self-Refine 10.0s, Tree-of-Thought 11.2s.
+4. **Time tracks the loop, not the result.** Baseline 2.1s per run, Agentic-PR 6.1s, Self-Refine 10.0s, Tree-of-Thought 11.2s — and the extra time does not buy accuracy for the two model-driven methods.
 5. **Cost depends on the model as much as the method.** Tree-of-Thought cost 9× more per solve on Llama-2 than on Mistral, with identical code.
 
 *Caveats: 34 runs per method is directional, not statistical. Two 7B models from 2023. Game of 24 was out of reach, so the math family contributes almost nothing. Timings include GPU queue time.*
@@ -219,7 +199,7 @@ Notes:
 
 ---
 
-## Appendix A — What APR is in our implementation
+# Appendix A — What APR is in our implementation
 
 **Independent fresh attempts, verified by tests. Not self-refine, and not a combination.**
 
@@ -242,7 +222,7 @@ Notes:
 
 ---
 
-## Appendix B — Key parameters (1 of 2)
+# Appendix B — Key parameters (1 of 2)
 
 | Parameter | Value |
 |---|---|
@@ -262,7 +242,7 @@ Notes:
 
 ---
 
-## Appendix B — Key parameters (2 of 2)
+# Appendix B — Key parameters (2 of 2)
 
 | Method | Setting |
 |---|---|
