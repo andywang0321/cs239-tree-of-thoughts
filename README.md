@@ -414,15 +414,13 @@ slides/     deck.md (Marp, Beam theme in slides/themes/beam-ucla.css)
 
 Papers: `papers/tree-of-thoughts.pdf`, `papers/self-refine.pdf`, `papers/agent-program-repair.pdf`.
 
-Deck: `slides/deck.md` uses the [Beam theme](https://github.com/rnd195/my-marp-themes). Render it
-from the repo root, **passing the theme explicitly**:
+Deck: `slides/deck.md` is plain Marp using the **default theme** - no theme file, no `--theme-set`:
 
 ```bash
-marp slides/deck.md --theme-set slides/themes/beam-ucla.css -o slides/deck.pdf --allow-local-files
+marp slides/deck.md -o slides/deck.pdf --allow-local-files
 ```
 
-Without `--theme-set`, marp cannot find a theme named `beam-ucla` and silently falls back to its
-default theme, so the deck renders as plain markdown rather than Beam. All CSS lives in
-`slides/themes/`: `beam.css` is the upstream theme vendored verbatim, and `beam-ucla.css` is the
-single self-contained theme the deck actually uses (Beam + a short overrides block for readable
-header/footer text and tighter table sizing).
+Only `theme: default` plus a short `style:` block in the front matter (font sizes, table padding,
+header/footer placement). Two earlier attempts at the Beam theme are gone: it rendered nothing at
+all without `--theme-set`, and once it rendered, its full-width title banner and bottom bar fought
+every sizing change.

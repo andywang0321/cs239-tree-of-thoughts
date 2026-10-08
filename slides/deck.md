@@ -1,23 +1,36 @@
 ---
 marp: true
-theme: beam-ucla
+theme: default
 paginate: true
 header: 'Bruce Li, Andy Wang, Cecilia Xu'
 footer: 'UCLA Samueli School of Engineering'
+style: |
+  /* marp's default theme, with three small tunings. No external theme file is needed. */
+  section {
+    font-size: 19px;
+    padding: 46px 54px;
+  }
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.25em; }
+  table { font-size: 0.85em; }
+  th, td { padding: 3px 10px; }
+  header, footer {
+    font-size: 13px;
+    color: #8a8a8a;
+  }
+  header { left: 54px; top: 16px; right: 54px; }
+  footer { left: 54px; bottom: 14px; right: 54px; }
+  section::after { font-size: 13px; bottom: 14px; right: 54px; }
+  img { display: block; margin: 8px auto 0 auto; }
 ---
 
 <!--
-RENDER  (from the repo root, and the theme MUST be given to marp)
-  marp slides/deck.md --theme-set slides/themes/beam-ucla.css -o slides/deck.pdf --allow-local-files
-Without --theme-set, marp does not find the theme and silently renders with its default theme -
-that is the difference between "looks like Beam" and "looks like plain markdown".
-The only CSS lives in slides/themes/: beam.css is vendored from
-https://rnd195.github.io/my-marp-themes/beam.css and beam-ucla.css adds small overrides.
+RENDER  (from the repo root - no theme file needed)
+  marp slides/deck.md -o slides/deck.pdf --allow-local-files
+Presenter notes live in HTML comments and never render into the PDF.
 -->
 
 <!-- Presenter notes live in HTML comments and never render into the PDF. -->
-
-<!-- _class: title -->
 
 # Should Agents Reason Linearly or as a Tree?
 
@@ -114,7 +127,7 @@ Notes:
 
 # Success rate
 
-![w:680](visuals/success-rate.png)
+![w:750](visuals/success-rate.png)
 
 **Findings:** Agentic-PR leads overall (35%) and on both coding and counting. Tree-of-Thought only works on the stronger model (53% Mistral vs 6% Llama-2). Game of 24 is a wall: 1 solve in 48.
 
@@ -130,9 +143,9 @@ Notes:
 
 # Tokens spent
 
-![w:680](visuals/tokens.png)
+![w:750](visuals/tokens.png)
 
-**Findings:** Tree-of-Thought's cost swings 9× with the model — 14,045 tokens per solve on Llama-2 vs 1,524 on Mistral, same code. Agentic-PR is the cheapest route to accuracy: 1,340 per solve against Baseline's 606.
+**Findings:** Tree-of-Thought costs 9× more per solve on Llama-2 than on Mistral (14,045 vs 1,524), same code. Agentic-PR is the cheapest route to accuracy.
 
 <!--
 Notes:
@@ -145,7 +158,7 @@ Notes:
 
 # Wall-clock time
 
-![w:680](visuals/wall-time.png)
+![w:750](visuals/wall-time.png)
 
 **Findings:** Baseline 2.1s per run, Agentic-PR 6.1s, Self-Refine 10.0s, Tree-of-Thought 11.2s. Time tracks how many calls a method makes — not how good it is.
 
@@ -178,8 +191,6 @@ Notes:
 
 ---
 
-<!-- _class: appendix -->
-
 # Appendix A — Task distribution
 
 | Family | Tasks | Task IDs |
@@ -201,8 +212,6 @@ Notes:
 -->
 
 ---
-
-<!-- _class: appendix -->
 
 # Appendix B — What APR is in our implementation
 
@@ -227,8 +236,6 @@ Notes:
 
 ---
 
-<!-- _class: appendix -->
-
 # Appendix C — Key parameters (1 of 2)
 
 | Parameter | Value |
@@ -248,8 +255,6 @@ Notes:
 -->
 
 ---
-
-<!-- _class: appendix -->
 
 # Appendix C — Key parameters (2 of 2)
 
