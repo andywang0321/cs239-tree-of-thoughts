@@ -18,24 +18,41 @@
 | Agentic-Program-Repair | 1,991 | 1,015 | 1,340 | 2.5 | 6.1 |
 | Tree-of-Thought | 14,045 | 1,524 | 2,776 | 6.9 | 11.2 |
 
+### Solve rate by task family
+
+| Method | Game of 24 | Coding | Letter counting |
+|---|---|---|---|
+| Baseline (IO) | 0% | 30% | 33% |
+| Self-Refine | 0% | 20% | 33% |
+| Agentic-Program-Repair | 0% | 40% | 67% |
+| Tree-of-Thought | 8% | 40% | 42% |
+
+### Task distribution
+
+| Family | Tasks |
+|---|---|
+| Game of 24 | 6 |
+| Coding | 5 |
+| Letter counting | 6 |
+
 ### Per task: how many of the 8 runs solved it
 
-| Task | Family | Solved | Methods that solved it |
+| Task | Family | Solved | Solved by |
 |---|---|---|---|
-| Game of 24 #1 | Game of 24 | 0/8 | **none** |
-| Game of 24 #2 | Game of 24 | 0/8 | **none** |
-| Game of 24 #3 | Game of 24 | 0/8 | **none** |
-| Game of 24 #4 | Game of 24 | 0/8 | **none** |
-| Game of 24 #5 | Game of 24 | 0/8 | **none** |
-| Game of 24 #0 | Game of 24 | 1/8 | Tree-of-Thought |
-| parse formula | Python + tests | 0/8 | **none** |
-| rotate | Python + tests | 1/8 | Agentic-Program-Repair |
-| merge intervals | Python + tests | 3/8 | Agentic-Program-Repair, Baseline (IO), Tree-of-Thought |
-| kth largest | Python + tests | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
-| merge sorted arrays | Python + tests | 5/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
-| raspberry | Letter counting | 1/8 | Agentic-Program-Repair |
-| refrigerator | Letter counting | 3/8 | Agentic-Program-Repair, Self-Refine, Tree-of-Thought |
-| strawberry | Letter counting | 3/8 | Agentic-Program-Repair, Tree-of-Thought |
-| bookkeeper | Letter counting | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
-| dreadnought | Letter counting | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
-| mississippi | Letter counting | 6/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| count-Mississippi | Letter counting | 6/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| count-bookkeeper | Letter counting | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| count-dreadnought | Letter counting | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| count-raspberry | Letter counting | 1/8 | Agentic-Program-Repair |
+| count-refrigerator | Letter counting | 3/8 | Agentic-Program-Repair, Self-Refine, Tree-of-Thought |
+| count-strawberry | Letter counting | 3/8 | Agentic-Program-Repair, Tree-of-Thought |
+| g24-0 | Game of 24 | 1/8 | Tree-of-Thought |
+| g24-1 | Game of 24 | 0/8 | **none** |
+| g24-2 | Game of 24 | 0/8 | **none** |
+| g24-3 | Game of 24 | 0/8 | **none** |
+| g24-4 | Game of 24 | 0/8 | **none** |
+| g24-5 | Game of 24 | 0/8 | **none** |
+| prog-kth_largest | Coding | 4/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| prog-merge_intervals | Coding | 3/8 | Agentic-Program-Repair, Baseline (IO), Tree-of-Thought |
+| prog-merge_sorted_arrays | Coding | 5/8 | Agentic-Program-Repair, Baseline (IO), Self-Refine, Tree-of-Thought |
+| prog-parse_formula | Coding | 0/8 | **none** |
+| prog-rotate | Coding | 1/8 | Agentic-Program-Repair |

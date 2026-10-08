@@ -3,23 +3,24 @@ marp: true
 theme: default
 paginate: true
 style: |
-  section { font-size: 21px; padding: 30px 40px; }
-  h1 { font-size: 32px; }
-  h2 { font-size: 26px; margin: 0 0 6px 0; }
-  h3 { font-size: 21px; margin: 10px 0 2px 0; }
+  section { font-size: 21px; padding: 28px 38px; }
+  h1 { font-size: 31px; }
+  h2 { font-size: 25px; margin: 0 0 6px 0; }
   table { font-size: 16px; margin: 6px 0; }
   th, td { padding: 2px 8px; }
   img { display: block; margin: 4px auto 0 auto; }
   ul { margin: 4px 0 0 0; }
   li { margin-bottom: 2px; }
   p { margin: 4px 0; }
+  section.appendix h2 { color: #555; }
 ---
 
 <!--
 RENDER
-  cd .. && marp slides/deck.md -o slides/deck.pdf
-Figures are sized per slide to fit 16:9 (max height ~430px). Presenter notes are in
-HTML comments so they never render into the PDF.
+  cd .. && marp slides/deck.md -o slides/deck.pdf --allow-local-files
+Image paths are relative to the repo root, so render from the project root.
+Presenter notes are in HTML comments and never appear in the PDF.
+Figures are sized to stay under ~430px tall so nothing runs off a 16:9 slide.
 -->
 
 # Should Agents Reason Linearly or as a Tree?
@@ -47,7 +48,7 @@ Presenters: Andy Wang, Cecilia Xu, Bruce Li
 Notes:
 - Two methods generate more text (Self-Refine, Tree-of-Thought). One branches. One checks.
 - The axis we are testing: is the win from more thinking, from branching, or from verification?
-- Note Self-Refine and APR are both linear loops. The difference is who decides you are done: the model itself, or a test.
+- Self-Refine and APR are both linear loops. The difference is who decides you are done: the model itself, or a test.
 -->
 
 ---
@@ -73,8 +74,7 @@ Notes:
 - Plain language: "the tests are the teacher." The model does not have to know it is right; it has to make the tests pass.
 - Key nuance for our experiment: the paper's gain comes from a verifier plus retries — NOT from tree search. That is what we test.
 - If asked "is this MCTS over patches?": no. The paper does not do tree search.
-- Since the system is closed, we could not copy it. We reimplemented the described loop: independent attempts, verified by tests.
-- One honest gap: we tell the model "the verifier rejected it", not which assertion failed. APR feeds the real test output back, so our version has a weaker signal than the paper's.
+- Since the system is closed we could not copy it; see Appendix B for exactly what we implemented.
 -->
 
 ---
@@ -84,18 +84,17 @@ Notes:
 | Family | Task | The model must produce | How we grade it |
 |---|---|---|---|
 | **Game of 24** | Use four numbers and `+ - * /` to reach 24 | Equations + an `Answer:` line | Exact arithmetic check |
-| **Python + tests** | Write a function from a docstring | A code block | **Real unit tests in a subprocess** |
+| **Coding** | Write a function from a docstring | A code block | **Real unit tests in a subprocess** |
 | **Letter counting** | Count one letter in a tricky word | Inventory line + count | Exact count |
 
 **Nothing is graded by a model.** Every pass/fail comes from arithmetic, a test run, or a string compare.
-
-17 tasks ran: 6 × Game of 24, 5 × Python, 6 × letter counting — per model, per method.
 
 <!--
 Notes:
 - Emphasise the grading: this is why the pass/fail column can be trusted. An LLM-as-judge could not tell us whether search works.
 - Letter counting is a deliberate trap: these are questions where models confidently say "2 r's in strawberry".
 - The unit tests are the same feedback signal the APR paper uses, in miniature.
+- Task counts are in Appendix A.
 -->
 
 ---
@@ -116,136 +115,116 @@ Notes:
 Notes:
 - Be upfront: 136 runs is 34 runs per method. Directional, not a significance test.
 - The 60-call cap never bound: ToT averaged 6.9 calls, 10 max.
-- Timings include waiting for a parallel slot, so they are an upper bound on latency, not clean per-call speed. Token counts are unaffected.
+- Timings include waiting for a parallel slot, so they are an upper bound on latency. Token counts are unaffected.
+- Full hyperparameters are in Appendix C.
 -->
 
 ---
 
-# Why the pooled average misleads
+# Success rate — Llama-2 7B
 
-| Method | Solved | Tokens per solve |
-|---|---|---|
-| Baseline (IO) | 21% | 606 |
-| Self-Refine | 18% | 3,567 |
-| Agentic-PR | **35%** | 1,340 |
-| Tree-of-Thought | 29% | 2,776 |
+![w:590](visuals/success-rate-llama-2-7b.png)
 
-**6 of 17 tasks were solved by nobody.** They sit in every method's denominator equally, so they drag all four numbers down.
-
-Every claim from here on is made one task at a time.
+**Findings (left):** no method solves a single Game of 24 puzzle. **Self-Refine and Tree-of-Thought gain nothing on coding** (0/5 each). Agentic-PR's only wins are counting (4/6).
 
 <!--
 Notes:
-- This slide is the honest version of the headline number, and it is what people will ask for.
-- The trap: task mix drives the whole table. Six tasks contaminate the comparison in the same way for everyone.
-- Keep this up briefly, then move to the per-task picture.
+- The story on Llama-2 is blunt: this model is too weak for search to help. Three of four methods solve 0 coding tasks.
+- Agentic-PR's 4/6 on counting is the one place extra attempts convert into correct answers.
+- ToT is the only method that never solves a counting task on this model, despite spending the most tokens of any method here (14,045 per solve).
 -->
 
 ---
 
-# Finding 1 — No method wins. Each method owns different tasks.
+# Success rate — Mistral 7B
 
-![w:800](visuals/per-task-matrix.png)
+![w:565](visuals/success-rate-mistral-7b.png)
 
-| | Task | Solved by |
-|---|---|---|
-| Only Tree-of-Thought | Game of 24 #0 | 1 of 8 runs |
-| Only Agentic-PR | rotate · raspberry | 1 of 8 each |
-| Nobody | 5 × Game of 24 · parse formula | **0 of 8** |
+**Findings (right):** with a stronger model every method improves. **Tree-of-Thought is co-best on coding (3/5)** and the *only* method to solve any Game of 24 puzzle. Agentic-PR still leads counting (4/6).
 
 <!--
 Notes:
-- Read the dots, not the averages. Filled = solved; grey = failed. Each dot is one run.
-- The real headline is not "APR wins". It is "these methods are not interchangeable" — each has a niche.
-- Tree-of-Thought's only unique win is the hardest single task in the suite. Agentic-PR owns the two tasks where one retry fixes a near-miss.
-- The paper's famous 74% on Game of 24 is a GPT-4 result. These 7B models cannot do the task at all, so search has nothing to search over.
+- Same code, same prompts as the previous slide - only the model changed. That is the cleanest evidence that these methods amplify a capable model rather than rescuing a weak one.
+- ToT goes from 6% overall on Llama-2 to 53% on Mistral.
+- Even here, nobody solves Game of 24 reliably: 1 solve out of 24 Mistral attempts across all four methods.
+-->
+
+---
+
+# Success rate — both models, all six bars
+
+![w:740](visuals/success-rate.png)
+
+Overall: **Agentic-PR 35%**, Tree-of-Thought 29%, Baseline (IO) 21%, Self-Refine 18%.
+
+Counting separates the methods most: Agentic-PR 8/12 runs vs Baseline 4/12.
+
+<!--
+Notes:
+- This is the combined view; keep it for audience questions rather than presenting it as the headline.
+- Colour + position identify each bar: dark = Llama-2, light = Mistral; blue = Game of 24, orange = coding, green = counting.
+- Self-Refine never beats Baseline on any family.
+-->
+
+<!--
+Notes:
+- Each bar is one method on one family on one model: 6 bars per method. Read colour + position together.
+- The tall green bars are Agentic-PR on counting. The one tall blue bar is ToT on Mistral.
+- Point out the dark-blue bars at zero: ToT on Llama-2 solved nothing on counting, and only 1/5 on coding. Baseline and APR also score 0 on coding with Llama-2, so Llama-2 is simply weak at code.
+- The key takeaway: no method dominates. Each family favours a different strategy.
 - This is not a grading bug: we scanned every failed math run for a correct answer rejected for a missing `Answer:` line. Zero found.
 -->
 
 ---
 
-# Finding 2 — Hard tasks cost more, and failing costs more than succeeding
+# Tokens spent — Llama-2 7B
 
-![w:800](visuals/per-task-cost.png)
+![w:660](visuals/tokens-llama-2-7b.png)
+
+**Findings (left):** Tree-of-Thought **never solves a counting task** here, and costs the most per solve of any method (**14,045 tokens**). Self-Refine is the second most expensive at **3,800** and still loses to one-shot.
 
 <!--
 Notes:
-- Every row is one task; every marker is one run. Filled = solved, hollow = failed.
-- Two patterns: hollow markers sit further right than filled ones (failure burns tokens), and the Game of 24 rows are furthest right of all.
-- So a token bill is not a measure of effort — it measures not knowing when to stop.
-- Baseline is the exception: it cannot spend more, so its failures are cheap. It also never gets a second chance.
+- Boxes show only runs that solved the task; "never solved" labels are findings in their own right.
+- This is the cost of search without a competent generator: ToT expands branches that never become good answers.
+- Compare with the next slide: identical code, same prompts, 9x cheaper per solve on Mistral.
 -->
 
 ---
 
-# Finding 3 — Agentic-PR's wins concentrate where checking is cheap
+# Tokens spent — Mistral 7B
 
-| Task | Baseline (IO) | Self-Refine | Agentic-PR | Tree-of-Thought |
-|---|---|---|---|---|
-| count Mississippi | 2/2 | 1/2 | **2/2** | 1/2 |
-| count bookkeeper | 0/2 | 1/2 | **2/2** | 1/2 |
-| count dreadnought | 0/2 | 1/2 | **2/2** | 1/2 |
-| count strawberry | 0/2 | 0/2 | **2/2** | 1/2 |
-| count raspberry | 0/2 | 0/2 | **1/2** | 0/2 |
-| count refrigerator | 0/2 | **1/2** | **1/2** | 0/2 |
+![w:660](visuals/tokens-mistral-7b.png)
 
-*(each cell: of 2 runs — one per model)*
-
-**Two thirds of Agentic-PR's 12 solves come from this one family** — 8 of 12 runs, and 8 counting solves out of 12 total.
-
-It spends about twice what Tree-of-Thought does on these tasks (203 vs 105 tokens per run), and solves nearly twice as many.
+**Findings (right):** the same method costs **1,524 tokens per solve** on Mistral instead of 14,045. Tree-of-Thought becomes the cheapest of the three deliberate methods, because it stops early when a branch validates.
 
 <!--
 Notes:
-- Counting is a perfect fit: the answer is exactly checkable, so "try again" is a real strategy rather than a hope.
-- This is the paper's thesis in miniature. When a cheap, exact check exists, retries with that check beat clever search.
-- The table is per task, so one lucky task cannot carry the column.
-- The one counter-example — refrigerator — is the next slide.
+- The headline of the whole deck is on this pair of slides: cost is a property of model-plus-method, not of the method alone.
+- Agentic-PR remains the best value overall: 1,340 tokens per solve against Baseline's 606 while solving nearly twice as many tasks.
+- Self-Refine is expensive on both models (~3,500 overall) and never beats Baseline.
 -->
 
 ---
 
-# Finding 4 — One task rewards keeping your place
+# Tokens, both models side by side (reference)
 
-`count-refrigerator` → the answer is **4**
+![w:1150](visuals/tokens-all.png)
 
-| Method | Llama-2 7B | Tokens | Rounds |
-|---|---|---|---|
-| Baseline (IO) | wrong | 56 | 1 |
-| Self-Refine | **correct** | 339 | 7 |
-| Agentic-PR | **correct** | 187 | 3 |
-| Tree-of-Thought | wrong — answered **6** | 126 | 5 |
-
-Tree-of-Thought spent more than the two methods that got it right, and got it wrong.
+Every run, solved or failed. Failures cost more than successes for every method except Baseline.
 
 <!--
 Notes:
-- The mechanism: the tree stores only each node's checkable fragment. For counting, that is the letter list — not the running count. So the tree re-derives the count from scratch each round and re-derives it wrongly.
-- Self-Refine keeps the whole previous answer in context, so it can correct its own count.
-- The lesson is not "trees are bad". It is that the state you keep decides what the method can fix. Small checkable state is what makes pruning possible — and it is also what gets lost.
-- Own this as an implementation choice: the node format was designed for search efficiency.
+- Keep for appendix duty or audience questions; the per-model slides carry the argument.
+- The pattern: without a stopping signal, extra deliberation is spent on failures.
 -->
 
----
-
-# Finding 5 — Self-Refine costs the most and gains the least
-
-| Method | Solved (of 34 runs) | Tokens per solve | Model calls per run |
-|---|---|---|---|
-| Baseline (IO) | 7 | **606** | 1.0 |
-| Self-Refine | 6 | 3,567 | 5.7 |
-| Agentic-PR | **12** | 1,340 | 2.5 |
-| Tree-of-Thought | 10 | 2,776 | 6.9 |
-
-**Self-Refine was worse than answering once** — at 5.9× the tokens and 5.7× the calls.
-
-Its stop condition almost never fired: 5 of its 6 successful runs hit the round limit instead of the model deciding it was done.
-
 <!--
 Notes:
-- Mechanism: Self-Refine's only source of truth is the model's own critique, and a 7B model's critique is only as good as the model. It repeatedly confirmed wrong answers.
-- We watched it approve a strawberry count of 2 through seven consecutive rounds.
-- If asked what would fix it: an external check. Which is exactly what APR adds.
+- Boxes show only the runs that solved the task, so the "never solved" labels are themselves a finding: ToT on Llama-2 never produced a single correct counting answer, though it did manage 1 of 5 coding tasks.
+- The second figure (visuals/tokens-all.png) shows every run including failures if someone wants the full picture.
+- The ToT Llama-2 number is the headline caveat: search amplifies a capable model and wastes compute on a weak one.
+- If asked about time instead of tokens: same ordering, roughly 2s/10s/6s/11s per run for Baseline/Self-Refine/APR/ToT, inflated by GPU queueing.
 -->
 
 ---
@@ -254,17 +233,105 @@ Notes:
 
 **1. Verification is the win, not the tree.** Tests turn extra compute into correct answers. More thinking without a check mostly buys longer wrong answers.
 
-**2. The methods are not interchangeable.** Tree-of-Thought's only unique win was the hardest task; Agentic-PR owned the retry-friendly ones.
+**2. The methods are not interchangeable.** Agentic-PR owns counting and coding; Tree-of-Thought's best case is a harder task on a stronger model.
 
-**3. Self-Refine is the weakest link.** Most expensive, least accurate — worse than one-shot.
+**3. Self-Refine is the weakest link here.** Most expensive, least accurate — worse than one-shot on every family.
 
-**4. What you keep in the state decides what you can fix.** Tree-of-Thought lost a task Self-Refine won, because its compact state discarded the running count.
+**4. Cost depends on the model as much as the method.** Tree-of-Thought cost 9× more per solve on Llama-2 than on Mistral with identical code.
 
 *Caveats: 34 runs per method is directional, not statistical. Two 7B models from 2023. Game of 24 was out of reach, so the math family contributes almost nothing. Timings include GPU queue time.*
 
 <!--
 Notes:
 - Point 1 is the APR paper's own ablation, reproduced at 1/50th the scale.
-- If asked "so is Tree-of-Thought useless?": no. It won the single hardest task, came second overall, and went from 6% on Llama-2 to 53% on Mistral with identical code. Its payoff depends on the base model.
+- If asked "so is Tree-of-Thought useless?": no. It won the hardest single task and came second overall, but only on the stronger model.
 - If asked what is next: more runs per task, a stronger base model, and a task set where partial credit is meaningful so pruning has real signal.
+-->
+
+---
+
+# Appendix A — Task distribution
+
+| Family | Tasks | Runs per model, per method |
+|---|---|---|
+| Game of 24 | 6 | 6 |
+| Coding | 5 | 5 |
+| Letter counting | 6 | 6 |
+| **Total** | **17** | **17** |
+
+Total runs: 2 models × 4 methods × 17 tasks = **136**
+
+Per task, 8 runs (2 models × 4 methods). Six tasks were solved by nobody: five Game of 24 puzzles and `parse_formula`.
+
+<!--
+Notes:
+- The suite defines 19 tasks; this run used 6 of the 8 available Game of 24 puzzles, so 17 ran.
+- Each family is small (5-6 tasks), which is why every single solve moves a bar by ~8%.
+- Full per-task detail is in visuals/TABLES.md.
+-->
+
+---
+
+# Appendix B — What APR is in our implementation
+
+**Independent fresh attempts, verified by tests. Not self-refine, and not a combination.**
+
+| Attempt | What the model sees |
+|---|---|
+| 1 | the problem prompt, alone |
+| 2 | the problem prompt + the rejected answer + *"start again with a DIFFERENT approach"* |
+| 3 | the same, with attempt 2 as the rejected answer |
+
+Each attempt is a complete, independent answer. Test results decide **whether to retry** — nothing is carried forward as a partial solution.
+
+**Honest gap vs. the paper:** we tell the model *"the verifier rejected it"*, not *which test failed*. APR feeds the real test output back into the loop, so our signal is weaker than theirs.
+
+<!--
+Notes:
+- This is the slide to keep for a technical audience, since the paper's system is closed-source.
+- What we kept: N independent attempts, each judged by real tests. What we dropped: file reading, stack traces, the 15-action harness — none of it applies to self-contained tasks.
+- If someone asks "why not feed the traceback back?" — the tasks are single-function problems with one-line assertions, so the traceback adds little; but it is a fair criticism and cheap to add.
+-->
+
+---
+
+# Appendix C — Key parameters (1 of 2)
+
+| Parameter | Value |
+|---|---|
+| Models | `llama2:7b-chat`, `mistral:7b-instruct` (7B, 2023-era) |
+| Serving | Ollama 0.40.0, CUDA, 2 × RTX PRO 6000 (95 GB each) |
+| Concurrency | `NUM_PARALLEL=4`, 6 runs in flight (`--jobs 6`) |
+| Tasks | 17 per model per method (6 math / 5 coding / 6 counting) |
+| Runs | 2 models × 4 methods × 17 tasks = **136** |
+| Call cap | 60 model calls per task (max observed: 10) |
+| Output cap | 450 tokens per generation |
+| Concurrency of scoring | 1 batched scoring call per tree level |
+
+<!--
+Notes:
+- The 450-token cap is why some answers look truncated; it never bound on the short counting tasks.
+- The call cap never bound for any method, so it is not what limited ToT.
+-->
+
+---
+
+# Appendix C — Key parameters (2 of 2)
+
+| Method | Setting |
+|---|---|
+| Baseline (IO) | temperature 0.0, 1 call |
+| Self-Refine | temperature 0.7, max 4 rounds; critique at temperature 0.0, 120 tokens |
+| Agentic-Program-Repair | temperature 0.9, 3 independent attempts |
+| Tree-of-Thought | temperature 0.8; depth 3 (math) / 2 (others); expand 2; beam 2; scoring at temperature 0.0 |
+
+**Verifiers** (`tasks.py`): unit tests run in a subprocess with a 10 s timeout; an exhaustive solver for Game of 24; exact string/number matching for counts.
+
+**Deliberate fairness choice:** `--iters 4` (Self-Refine's paper default) and `--candidates 3` give all methods comparable numbers of attempts.
+
+<!--
+Notes:
+- Temperature differences are intentional: the branching methods need diversity to search over, the one-shot baseline does not.
+- The verifiers are the part I would defend hardest — grading never involves a model.
+- If asked about tuning: these are paper defaults or round numbers, not swept. A sweep is the obvious next experiment.
 -->
