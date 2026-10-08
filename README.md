@@ -145,23 +145,28 @@ Ollama ships a self-contained binary; the installer's only privileged steps are 
 `/usr/local/bin` and registering a systemd unit. Do both by hand in your home directory instead:
 
 ```bash
-uv run serve.py --install     # resolves the latest GitHub release, downloads, unpacks into ~/bin
+uv run serve.py --install     # resolves the latest GitHub release, unpacks into ~/ollama
 export PATH="$HOME/bin:$PATH" # add to ~/.bashrc so it survives logout
 ```
 
-The download is ~1.4 GB for the amd64 build (it bundles the CUDA libraries) and ~1 GB for arm64.
-`serve.py --install` resolves the asset name from the GitHub API, so it keeps working when releases
-are renamed. To do it manually, note that **the asset is `.tar.zst`, not `.tgz`** — the old
+**The archive layout matters.** It unpacks to `bin/ollama` plus `lib/ollama/*` (CUDA/cuBLAS
+libraries), and the binary locates those libraries relative to itself. So it must be extracted
+intact — never flattened with `--strip-components`, which both destroys the `bin/`/`lib/` pairing
+and leaves a useless `lib/ollama` in your PATH directory. `serve.py --install` extracts into
+`~/ollama` (override with `OLLAMA_PREFIX`) and drops a symlink at `~/bin/ollama` for PATH
+convenience. The download is ~1.4 GB for amd64 because it bundles CUDA; ~1 GB for arm64.
+
+To do it manually, note the asset is **`.tar.zst`, not `.tgz`** — the old
 `ollama.com/download/ollama-linux-amd64.tgz` URL now 404s:
 
 ```bash
-mkdir -p ~/bin ~/ollama-models
+mkdir -p ~/ollama ~/ollama-models
 tag=$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest \
       | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
 curl -fL -o /tmp/ollama.tar.zst \
   "https://github.com/ollama/ollama/releases/download/$tag/ollama-linux-amd64.tar.zst"
-tar --zstd -xf /tmp/ollama.tar.zst -C ~/bin     # writes ~/bin/ollama and ~/bin/lib/ollama/*
-~/bin/ollama --version
+tar --zstd -xf /tmp/ollama.tar.zst -C ~/ollama      # gives ~/ollama/bin/ollama + ~/ollama/lib/*
+~/ollama/bin/ollama --version
 ```
 
 On an AMD GPU use `ollama-linux-amd64-rocm.tar.zst` instead (`OLLAMA_VARIANT=rocm uv run serve.py
@@ -193,8 +198,8 @@ done
 ```
 
 ```bash
-OLLAMA_BIN_DIR=/scratch/$USER/bin uv run serve.py --install
-export PATH="/scratch/$USER/bin:$PATH"
+OLLAMA_PREFIX=/scratch/$USER/ollama uv run serve.py --install
+export PATH="$HOME/bin:$PATH"      # serve.py symlinks the binary into ~/bin
 ```
 
 Note that `ollama` must *run* from an exec-capable mount, but the model store does not — only be

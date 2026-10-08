@@ -24,6 +24,10 @@ from llm import OLLAMA_BIN
 HOST = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
 MODELS_DIR = os.environ.get("OLLAMA_MODELS", os.path.expanduser("~/ollama-models"))
 BIN_DIR = os.environ.get("OLLAMA_BIN_DIR", os.path.expanduser("~/bin"))
+# The archive is bin/ollama + lib/ollama/*, and the binary finds its CUDA libraries through
+# $ORIGIN/../lib/ollama. So it must be unpacked intact and never flattened - hence its own prefix,
+# with a symlink in BIN_DIR for PATH convenience.
+PREFIX = os.environ.get("OLLAMA_PREFIX", os.path.expanduser("~/ollama"))
 TAGS = ["llama2:7b-chat", "mistral:7b-instruct"]
 RELEASES = "https://api.github.com/repos/ollama/ollama/releases/latest"
 
@@ -66,96 +70,104 @@ def fetch(url, dest):
 
 
 def install():
-    """Download the binary and unpack it into ~/bin. Needs no privileges at all."""
+    """Download the release and unpack it intact into ~/ollama, no privileges needed."""
     arch, asset = asset_name()
     tag, assets = release_assets()
     if asset not in assets:
         sys.exit(f"{asset} not in release {tag}. Available:\n  " + "\n  ".join(
             n for n in assets if n.startswith("ollama-linux")))
     url = assets[asset]
-    print(f"release {tag}\nasset   {asset}\nurl     {url}\n")
-    os.makedirs(BIN_DIR, exist_ok=True)
-    tmp = os.path.join(BIN_DIR, asset)
+    print(f"release {tag}\nasset   {asset}\nprefix  {PREFIX}\nurl     {url}\n")
+    os.makedirs(PREFIX, exist_ok=True)
+    tmp = os.path.join(PREFIX, asset)
     print("downloading...")
     fetch(url, tmp)
-    print(f"extracting into {BIN_DIR} (paths are lib/ollama/* and ./ollama)...")
-    if not extract(tmp, BIN_DIR):
-        sys.exit("could not extract .tar.zst - install zstd (conda/pip: `pip install zstandard`, "
-                 "or `tar --zstd -xf` if your tar supports it)")
+    print(f"extracting into {PREFIX} (keeps bin/ and lib/ together: the binary needs lib/ollama)")
+    names = extract(tmp, PREFIX)
+    if not names:
+        sys.exit("extraction failed - install `zstandard` (pip) or `zstd` (system) and retry")
+    binary = os.path.join(PREFIX, "bin", "ollama")
+    if not os.path.isfile(binary):
+        sys.exit(f"unexpected archive layout: {names[:5]} (no bin/ollama). "
+                 "Report this - the release format changed again.")
     os.remove(tmp)
-    binary = os.path.join(BIN_DIR, "ollama")
     os.chmod(binary, 0o755)
-    print(f"installed {binary} ({os.path.getsize(binary) / 1e6:.0f} MB)")
+    print(f"installed {binary} ({os.path.getsize(binary) / 1e6:.0f} MB, "
+          f"{len(names) - 1} support files)")
     ok, msg = check_exec(binary)
-    print(f"exec check  : {'ok' if ok else 'FAILED - ' + msg}")
+    print(f"exec check  : {'ok - ' + msg if ok else 'FAILED - ' + msg}")
     if not ok:
-        print("\nThe filesystem holding this directory probably has the noexec flag set. "
-              "Check with:  findmnt -T ~/bin -o TARGET,SOURCE,OPTIONS\n"
-              "Then either install somewhere else:\n"
-              "    OLLAMA_BIN_DIR=/path/on/exec/mount uv run serve.py --install\n"
-              "or look for a module/container with a writable exec mount (often /tmp or /scratch).")
+        if "Exec format error" in msg:
+            print(f"\nThat means the wrong architecture was installed for this machine "
+                  f"({platform.machine()}). Re-run with the matching asset, e.g. "
+                  f"OLLAMA_VARIANT='' and check `uname -m`.")
+        else:
+            print("\nIf a stock binary fails here too, this filesystem is mounted noexec (common on "
+                  "managed cluster homes). Check:  findmnt -T ~ -o TARGET,SOURCE,OPTIONS\n"
+                  "Then install to an exec-capable mount instead:\n"
+                  "    OLLAMA_PREFIX=/scratch/$USER/ollama uv run serve.py --install")
         sys.exit(1)
+    os.makedirs(BIN_DIR, exist_ok=True)
+    link = os.path.join(BIN_DIR, "ollama")
+    if os.path.isdir(link):  # leftovers from an older, flattened install
+        shutil.rmtree(link)
+    if os.path.lexists(link):
+        os.remove(link)
+    os.symlink(binary, link)
+    print(f"symlinked   : {link} -> {binary}")
     print(f"\nadd it to your PATH once:  export PATH=\"{BIN_DIR}:$PATH\"")
-    print("then:  uv run serve.py        # start the server")
+    print("then:  uv run serve.py --check ; uv run serve.py --pull ; uv run serve.py")
 
 
 def check_exec(binary):
-    """Distinguish 'file is not executable' from 'the mount forbids exec at all'."""
+    """Run the binary. A PermissionError here means the mount forbids exec, not a bad mode."""
     try:
         p = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=60)
     except PermissionError as e:
-        hint = "mount has noexec" if not _exec_allowed(BIN_DIR) else "permission denied"
-        return False, f"{e} ({hint})"
+        return False, f"{e} (the filesystem looks like it is mounted noexec)"
     except OSError as e:
         return False, str(e)
     return p.returncode == 0, (p.stdout or p.stderr).strip()
 
 
-def _exec_allowed(path):
-    """False when the filesystem is mounted noexec (Linux only; macOS has no ST_NOEXEC)."""
-    flag = getattr(os, "ST_NOEXEC", 0)
-    try:
-        return not (os.statvfs(path).f_flag & flag) if flag else True
-    except OSError:
-        return True
-
-
 def extract(path, dest):
-    """tarfile handles .tar.zst only on Python 3.14+; fall back to the zstd CLI or tar --zstd."""
+    """Unpack a .tar.zst. Returns the member names, or None if nothing worked.
+    Python < 3.14 cannot read zstd through tarfile, so the CLI and the `zstandard` package
+    are real fallbacks - silently returning success here is how a broken install slips through."""
     try:
         with tarfile.open(path) as t:
+            names = t.getnames()
             t.extractall(dest)
-        return True
-    except (tarfile.TarError, ValueError, NotImplementedError):
+        return names
+    except (tarfile.TarError, ValueError, NotImplementedError, EOFError):
         pass
-    for cmd in (["tar", "--zstd", "-xf", path, "-C", dest],
-                ["unzstd", "-c", path], ["zstd", "-dc", path]):
-        if not shutil.which(cmd[0]):
-            continue
-        try:
-            if cmd[0] == "tar":
-                if subprocess.run(cmd, capture_output=True).returncode == 0:
-                    return True
-            else:  # decompress to a temp .tar, then untar
-                out = path + ".tar"
-                with open(out, "wb") as f:
-                    if subprocess.run(cmd, stdout=f, capture_output=True).returncode:
-                        continue
-                with tarfile.open(out) as t:
+    if shutil.which("tar"):
+        r = subprocess.run(["tar", "--zstd", "-xf", path, "-C", dest], capture_output=True)
+        if r.returncode == 0:
+            return subprocess.run(["tar", "--zstd", "-tf", path], capture_output=True,
+                                  text=True).stdout.split()
+    if shutil.which("unzstd") or shutil.which("zstd"):
+        exe = shutil.which("unzstd") or shutil.which("zstd")
+        args = [exe, "-c", path] if exe.endswith("unzstd") else [exe, "-dc", path]
+        plain = path + ".tar"
+        with open(plain, "wb") as f:
+            if subprocess.run(args, stdout=f, stderr=subprocess.DEVNULL).returncode == 0:
+                with tarfile.open(plain) as t:
+                    names = t.getnames()
                     t.extractall(dest)
-                os.remove(out)
-                return True
-        except (OSError, tarfile.TarError):
-            continue
-    if shutil.which("pip"):
-        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "zstandard"])
-        try:
-            with tarfile.open(path) as t:
-                t.extractall(dest)
-            return True
-        except Exception:
-            pass
-    return False
+                os.remove(plain)
+                return names
+        if os.path.exists(plain):
+            os.remove(plain)
+    try:  # last resort: pip-install the codec into the current venv
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "zstandard"],
+                       capture_output=True)
+        with tarfile.open(path) as t:
+            names = t.getnames()
+            t.extractall(dest)
+        return names
+    except Exception:
+        return None
 
 
 def find_binary():
