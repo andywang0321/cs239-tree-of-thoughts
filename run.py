@@ -13,6 +13,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 import methods
+from plot import NAMES
 from tasks import TASKS
 
 TEMPLATE = "llama2:7b-chat mistral:7b-instruct"
@@ -127,7 +128,7 @@ def main():
             rows.append(r)
             done += 1
             tail = (r["answer"].strip().splitlines() or [""])[-1][:56]
-            print(f"[{done:3}/{len(work)}] {r['model']:22} {r['method']:9} {r['task']:26} "
+            print(f"[{done:3}/{len(work)}] {r['model']:22} {NAMES[r['method']]:24} {r['task']:26} "
                   f"{'PASS' if r['solved'] else 'fail':4} {r['calls']:2} calls "
                   f"{r['gen_tokens']:5} gen-tok {r['seconds']:6.1f}s  {tail}")
             if a.show:
@@ -138,7 +139,7 @@ def main():
     if a.answers:
         with open(a.answers, "w") as f:
             for r in rows:
-                f.write(f"### {r['model']} | {r['method']} | {r['task']} | "
+                f.write(f"### {r['model']} | {NAMES[r['method']]} | {r['task']} | "
                         f"{'PASS' if r['solved'] else 'fail'} | {r['gen_tokens']} gen-tokens\n"
                         f"{r['answer']}\n\n")
     report(rows, a.steps, a.models)
@@ -147,7 +148,7 @@ def main():
 
 def report(rows, steps, models):
     print("\n=== solve rate (pass / total) ===")
-    head = "method    " + "".join(f"{m.split(':')[0][:14]:>16}" for m in models) + "     overall"
+    head = f"{'method':24}" + "".join(f"{m.split(':')[0][:14]:>16}" for m in models) + "     overall"
     print(head)
     for s in steps:
         cells = ""
@@ -155,7 +156,7 @@ def report(rows, steps, models):
             rs = [r for r in rows if r["method"] == s and r["model"] == m]
             cells += f"{sum(r['solved'] for r in rs)}/{len(rs):<14}"
         rs = [r for r in rows if r["method"] == s]
-        print(f"{s:10}" + cells + f"  {sum(r['solved'] for r in rs)}/{len(rs)}")
+        print(f"{NAMES[s]:24}" + cells + f"  {sum(r['solved'] for r in rs)}/{len(rs)}")
 
     print("\n=== cost per solved task (generated tokens, all runs) ===")
     print(f"{'method':10}{'solved':>8}{'gen-tok/run':>13}{'gen-tok/solved':>16}{'sec/run':>10}{'calls/run':>11}")
@@ -163,7 +164,7 @@ def report(rows, steps, models):
         rs = [r for r in rows if r["method"] == s]
         ok = sum(r["solved"] for r in rs)
         gen = sum(r["gen_tokens"] for r in rs)
-        print(f"{s:10}{ok:>8}{gen / len(rs):>13.0f}{(gen / ok if ok else float('inf')):>16.0f}"
+        print(f"{NAMES[s]:24}{ok:>8}{gen / len(rs):>13.0f}{(gen / ok if ok else float('inf')):>16.0f}"
               f"{sum(r['seconds'] for r in rs) / len(rs):>10.1f}"
               f"{sum(r['calls'] for r in rs) / len(rs):>11.1f}")
 
@@ -176,7 +177,7 @@ def report(rows, steps, models):
         c[2] += r["gen_tokens"]
         c[3] += r["seconds"]
     for (s, k), (ok, tot, gen, sec) in sorted(fam.items()):
-        print(f"  {s:10}{k:9}{ok}/{tot:<5}tokens/run {gen / tot:6.0f}   sec/run {sec / tot:5.1f}")
+        print(f"  {NAMES[s]:24}{k:9}{ok}/{tot:<5}tokens/run {gen / tot:6.0f}   sec/run {sec / tot:5.1f}")
 
     print("\n=== mean generated tokens, split by outcome ===")
     for s in steps:
@@ -184,7 +185,7 @@ def report(rows, steps, models):
         win = [r["gen_tokens"] for r in rs if r["solved"]]
         lose = [r["gen_tokens"] for r in rs if not r["solved"]]
         f = lambda v: f"{sum(v) / len(v):.0f}" if v else "-"      # noqa: E731
-        print(f"  {s:10} solved {f(win):>7}   unsolved {f(lose):>7}")
+        print(f"  {NAMES[s]:24} solved {f(win):>7}   unsolved {f(lose):>7}")
 
 
 if __name__ == "__main__":

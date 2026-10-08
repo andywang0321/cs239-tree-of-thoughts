@@ -338,35 +338,49 @@ distribution split by whether the task was solved. Panel (b) is the one that car
   `retry --candidates 3`, so total attempts are roughly matched. `tree` also gets a hard
   `--max-calls` budget, which is why it stops after ~7 calls instead of exploding combinatorially.
 
-## Reference run (2 × 7B models, 3 tasks, 24 runs, M2 laptop, 42 min)
+## Main run (2 × 7B models, 19 tasks, 136 runs, 2 × RTX PRO 6000 Blackwell, ~20 min)
 
-Six runs per method (2 models × 3 tasks). Re-print this table straight from the committed results:
+The full task set: 6 × Game of 24, 5 × Python-with-tests, 6 × letter counting, per model per method.
 
 ```bash
-uv run run.py --summary results.json --models llama2:7b-chat mistral:7b-instruct
+CUDA_VISIBLE_DEVICES=0,1 OLLAMA_NUM_PARALLEL=4 OLLAMA_KEEP_ALIVE=30m uv run run.py \
+  --models llama2:7b-chat mistral:7b-instruct --steps baseline refine retry tree \
+  --n 6 --jobs 6 --out results-full.json --answers answers-full.md
+uv run plot.py --results results-full.json --out comparison.png --tables TABLES.md
 ```
 
-| method | solved | gen-tokens/run | calls/run | sec/run | gen-tokens per **solved** |
-|---|---|---|---|---|---|
-| baseline | 1/6 | 155 | 1.0 | 9.5 | 931 |
-| refine | 1/6 | 690 | 6.2 | 216 | 4141 |
-| retry | **2/6** | 381 | 2.5 | 31 | **1144** |
-| tree | 2/6 | 741 | 7.2 | 163 | 2222 |
+| Method | llama2:7b-chat | mistral:7b-instruct | Overall | tokens/solve | calls/run | sec/run |
+|---|---|---|---|---|---|---|
+| Baseline (IO) | 6% | 35% | 21% | 606 | 1.0 | 2.1 |
+| Self-Refine | 12% | 24% | 18% | 3,567 | 5.7 | 10.0 |
+| Agentic-Program-Repair | 24% | 47% | **35%** | **1,340** | 2.5 | 6.1 |
+| Tree-of-Thought | 6% | **53%** | 29% | 2,776 | 6.9 | 11.2 |
 
-Solve rate by family: programming `retry` 1/2 and `tree` 1/2; writing `retry` 1/2 and `tree` 1/2;
-math 0/2 for everything. Llama-2 7B chat scored 0/3 on all four methods; every point came from Mistral.
+| Method | Game of 24 | Python + tests | letter counting |
+|---|---|---|---|
+| Baseline (IO) | 0% | 30% | 33% |
+| Self-Refine | 0% | 20% | 33% |
+| Agentic-Program-Repair | 0% | 40% | **67%** |
+| Tree-of-Thought | **8%** | 40% | 42% |
 
-The story these numbers tell, in three beats:
+What this run says, and where it differs from the laptop:
 
-1. **The verifier is what pays, not the tree.** `retry` (independent attempts, tests decide) matched
-   `tree` on solve rate for about half the generated tokens and a fifth of the wall-clock time.
-2. **Self-critique is the weakest feedback available.** `refine` was both the most expensive method
-   and no better than one shot. Mistral's critique loop happily "confirmed" a strawberry count of 2
-   seven times in a row; the model cannot see its own error, and the loop just amplifies confidence.
-3. **Search needs a scoreable intermediate.** Math has an exact feasibility check; every method still
-   failed it, and `tree` spent the most tokens doing so. Programming has no partial-credit signal, so
-   `tree`'s pruning was mostly guesswork — exactly why the APR paper retries with test feedback
-   instead of searching a patch tree.
+1. **Tree-of-Thought is the best method on a capable model and the worst value on a weak one.**
+   It wins outright on Mistral (53% vs 47%) and collapses on Llama-2 (6%, *below* one-shot). Its
+   cost per solve differs 9x between the two models (14,045 vs 1,524 tokens) for the same code and
+   prompts — so ToT's payoff tracks how often the base model can actually produce a good thought.
+2. **Agentic-Program-Repair wins on aggregate** (35%) at 1,340 tokens per solve, less than half of
+   Self-Refine's 3,567. Retries plus an exact verifier is the best quality-per-token on every family
+   except pure math.
+3. **Self-Refine loses to one-shot on both models** (18% vs 21%). Linear self-critique, at 5.7x the
+   calls and 5.9x the tokens, produced no net gain — the model's critique is only as good as the
+   model.
+4. **Game of 24 is out of reach for 7B models.** 71 of 72 attempts failed; ToT's single success is
+   the only one. Verified it is not a format artifact: an unlabeled-answer scan found zero correct
+   solutions rejected for missing the `Answer:` line.
+
+Method naming follows the papers: Baseline (IO) = plain input-output prompting, Self-Refine
+(Madaan et al. 2023), Agentic-Program-Repair (Maddila et al. 2025), Tree-of-Thought (Yao et al. 2023).
 
 A demo moment worth pausing on: `mistral` + `tree` on Game of 24 produced
 `Answer: ((1 * 6) + (1 - 4)) * 6 = 24`, which is 18, not 24 — stated confidently, as a final answer,
