@@ -117,7 +117,7 @@ Notes:
 | **Serving** | Ollama, 2 GPUs, `NUM_PARALLEL=4`, 6 tasks in flight |
 | **Scale** | 2 models × 4 methods × 17 tasks = **136 runs** |
 | **Budget** | Same prompts for all four methods; 60 model calls per task maximum |
-| **Metrics** | Solve rate · generated tokens · model calls · wall-clock time |
+| **Metrics** | Solve rate · generated tokens · wall-clock time |
 
 **Cost is reported per *solved* task** — total tokens spent divided by tasks actually solved.
 
